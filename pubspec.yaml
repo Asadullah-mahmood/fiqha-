@@ -1,0 +1,85 @@
+name: quranpak
+description: "A beautiful Quran Pak app with Urdu & English translations, voice search."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons:
+
+    # Quran API
+  http:
+
+    # Voice search
+#  speech_to_text:
+
+    # Local storage & preferences
+#  shared_preferences:
+
+  shared_preferences:
+    # UI
+  google_fonts:
+  flutter_svg: ^2.0.10+1
+
+    # Audio for Quran recitation
+  audioplayers:
+
+    # State management
+  provider:
+
+  lottie:
+
+  gif_view: ^1.0.3
+
+  font_awesome_flutter:
+
+  firebase_core: ^4.15.0
+
+  google_sign_in: ^7.2.0
+
+  firebase_auth: ^6.7.0
+
+  toastification: ^3.2.0
+  cloud_firestore: ^6.10.0
+  hijri_date: ^1.1.0
+  permission_handler: ^13.0.2
+  geolocator: ^12.0.0
+  adhan_dart: ^2.0.1
+  geocoding: ^5.0.0
+  timezone:
+  lat_lng_to_timezone: ^0.2.0
+  precise_compass: ^0.2.0
+  qibla: ^1.0.1
+  audio_session: ^0.2.4
+  path_provider:
+  dio: ^5.11.1
+  sqflite: ^2.4.4
+  path:
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+
+flutter:
+
+  uses-material-design: true
+
+  assets:
+    - assets/image/
+    - assets/animations/
+
+
+  fonts:
+    - family: fiqha_icons
+      fonts:
+        - asset: assets/fiqhaIcons.ttf

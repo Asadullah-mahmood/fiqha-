@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "805262896243",
+    "project_id": "com-rustinnovations-fiqha",
+    "storage_bucket": "com-rustinnovations-fiqha.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:805262896243:android:05b6be4794367464808e06",
+        "android_client_info": {
+          "package_name": "com.rustinnovations.fiqha"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "805262896243-2rbnrr30mgqjsfit7mr4gv5tp4hscp05.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rustinnovations.fiqha",
+            "certificate_hash": "93888d2f9d812a6074acb1bcd1090bccb50aa1ab"
+          }
+        },
+        {
+          "client_id": "805262896243-hoim12e6iudjr2m3ccfqbnue6b3dm6mq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDtO9ctrTS6wEjRAwDtagrBhdqwvANpvAg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "805262896243-hoim12e6iudjr2m3ccfqbnue6b3dm6mq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "805262896243-4ltte1qh0s5dgdoc1e9928v12o4r7stb.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.rustinnovations.fiqha.fiqhaApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
