@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:precise_compass/precise_compass.dart';
 import 'package:qibla/qibla.dart';
 import 'package:quranpak/services/locationService.dart';
+import 'package:quranpak/widgets/QiblaMapView.dart';
+import 'package:quranpak/widgets/customIcons.dart';
 
 class QiblaScreen extends StatefulWidget {
   const QiblaScreen({super.key});
@@ -26,6 +28,9 @@ class _QiblaScreenState extends State<QiblaScreen>
   bool _shouldCalibrate = false;
   bool _isLoading = true;
   bool _isAligned = false;
+  double? _userLat;
+  double? _userLng;
+  bool _showMapView = false;
 
   /// True once we know the device has no usable magnetometer/compass
   /// sensor. When true we fall back to a manual ("virtual") Qibla mode
@@ -58,8 +63,14 @@ class _QiblaScreenState extends State<QiblaScreen>
       // 2. Calculate Qibla bearing + distance to the Ka'bah from the
       // user's position. This never needs the compass sensor, so it
       // works whether or not step 3 below finds a magnetometer.
+      _userLat = loc.latitude;
+      _userLng = loc.longitude;
+
+
       final bearing = qiblaAngle(loc.latitude, loc.longitude);
       final km = distanceKm(loc.latitude, loc.longitude, kaabaLat, kaabaLng);
+
+
 
       if (!mounted) return;
       setState(() {
@@ -144,6 +155,167 @@ class _QiblaScreenState extends State<QiblaScreen>
     return shortest <= 5;
   }
 
+  void _showInstructions() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFFFBF8F1),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'How to find the Qibla',
+                style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0F3D26),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'قبلہ کیسے معلوم کریں',
+                textDirection: TextDirection.rtl,
+                style: GoogleFonts.notoNastaliqUrdu(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF0F3D26),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _instructionBlock(
+                  english: 'Without a compass sensor',
+                  urdu: 'کمپاس سینسر کے بغیر',
+                  points: const [
+                    'Open the map view (map icon in the top bar).',
+                    'The red line runs from your location to the Ka\'bah.',
+                    'Turn your phone so the arrow/line points away from you.',
+                    'Use the sun, a street, or another landmark to keep your bearing.',
+                  ],
+                  urduPoints: const [
+                    'اوپر والے نقشے کے آئیکن سے میپ کھولیں۔',
+                    'سرخ لکیر آپ کی لوکیشن سے کعبہ تک جاتی ہے۔',
+                    'فون کو اس طرح گھمائیں کہ تیر/لکیر آپ سے دور ہو۔',
+                    'سمت برقرار رکھنے کے لیے سورج یا کسی اور نشان کا استعمال کریں۔',
+                  ],
+                ),
+                const Divider(height: 28),
+                _instructionBlock(
+                  english: 'Offline use',
+                  urdu: 'انٹرنیٹ کے بغیر استعمال',
+                  points: const [
+                    'The Qibla bearing and distance are calculated on-device — they work with no internet.',
+                    'The map view needs internet the first time to load map tiles.',
+                    'Once tiles are cached, the map shows your area and the Ka\'bah line offline.',
+                    'If the map is blank offline, use the compass dial or the manual bearing card.',
+                  ],
+                  urduPoints: const [
+                    'قبلہ کی سمت اور فاصلہ فون پر ہی حساب ہوتا ہے — انٹرنیٹ کی ضرورت نہیں۔',
+                    'میپ کو پہلی بار کھلنے کے لیے انٹرنیٹ چاہیے۔',
+                    'ایک بار لوڈ ہونے کے بعد میپ آف لائن بھی دکھائی دیتا ہے۔',
+                    'آف لائن میپ خالی ہو تو کمپاس ڈائل یا بیئرنگ کارڈ استعمال کریں۔',
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(
+                'Got it',
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF1B5E20),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  ///Instruction how to check qibla without sensor
+  Widget _instructionBlock({
+    required String english,
+    required String urdu,
+    required List<String> points,
+    required List<String> urduPoints,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          english,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            color: Colors.black87,
+          ),
+        ),
+        Text(
+          urdu,
+          textDirection: TextDirection.rtl,
+          style: GoogleFonts.notoNastaliqUrdu(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 6),
+        ...points.map(
+              (p) => Padding(
+            padding: const EdgeInsets.only(bottom: 4, left: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('• '),
+                Expanded(
+                  child: Text(
+                    p,
+                    style: GoogleFonts.inter(fontSize: 12, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        ...urduPoints.map(
+              (p) => Padding(
+            padding: const EdgeInsets.only(bottom: 4, right: 4),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('• '),
+                Expanded(
+                  child: Text(
+                    p,
+                    textDirection: TextDirection.rtl,
+                    textAlign: TextAlign.right,
+                    style: GoogleFonts.notoNastaliqUrdu(
+                      fontSize: 12,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   /// The dial rotates opposite to the device heading so N always points
   /// to true north, however the device is held.
   double get _dialTurns => -(_unwrappedHeadingDeg ?? 0) / 360;
@@ -170,18 +342,31 @@ class _QiblaScreenState extends State<QiblaScreen>
             color: Colors.black87,
           ),
         ),
+        actions: [
+          if (!_noCompassSensor)
+            IconButton(
+              icon: Icon(_showMapView ? Icons.explore_outlined : Icons.map_outlined),
+              tooltip: _showMapView ? 'Show compass' : 'Show on map',
+              onPressed: () {
+                setState(() => _showMapView = !_showMapView);
+              },
+            ),
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: 'How to find Qibla',
+            onPressed: _showInstructions,
+          ),
+        ],
       ),
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(
-          child: CircularProgressIndicator(color: Color(0xFF1B5E20)),
-        )
-            : _error != null
-            ? _buildError()
-            : _noCompassSensor
-            ? _buildManualQibla()
-            : _buildCompass(),
-      ),
+      body: _isLoading
+          ? const Center(
+        child: CircularProgressIndicator(color: Color(0xFF1B5E20)),
+      )
+          : _error != null
+          ? _buildError()
+          : (_noCompassSensor || _showMapView)
+          ? _buildManualQibla()
+          : SafeArea(child: _buildCompass()),
     );
   }
 
@@ -296,45 +481,44 @@ class _QiblaScreenState extends State<QiblaScreen>
   }
 
   /// A small stylised Ka'bah glyph: black cube, gold border, gold band.
-  Widget _kaabaIcon({required double size, bool highlighted = false}) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        color: const Color(0xFF161616),
-        borderRadius: BorderRadius.circular(size * 0.18),
-        border: Border.all(
-          color: highlighted ? const Color(0xFF1B5E20) : const Color(0xFFE2B76C),
-          width: math.max(1.5, size * 0.09),
-        ),
-        boxShadow: highlighted
-            ? [
-          BoxShadow(
-            color: const Color(0xFF1B5E20).withOpacity(0.55),
-            blurRadius: size * 0.7,
-            spreadRadius: size * 0.12,
-          ),
-        ]
-            : [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: size * 0.2,
-          ),
-        ],
+/// The Ka'bah glyph pulled from the custom "fiqha_icons" font.
+/// Keeps the pulse / glow / highlight behavior so alignment feedback
+/// still works exactly like before.
+Widget _kaabaIcon({required double size, bool highlighted = false}) {
+  return AnimatedContainer(
+    duration: const Duration(milliseconds: 250),
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: Colors.white,
+      boxShadow: highlighted
+          ? [
+              BoxShadow(
+                color: const Color(0xFF1B5E20).withOpacity(0.55),
+                blurRadius: size * 0.7,
+                spreadRadius: size * 0.12,
+              ),
+            ]
+          : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.12),
+                blurRadius: size * 0.2,
+              ),
+            ],
+    ),
+    child: Center(
+      child: Icon(
+        customIcons.kaaba,
+        size: size * 0.85,
+        color: highlighted
+            ? const Color(0xFF1B5E20)
+            : const Color(0xFF161616),
       ),
-      child: Center(
-        child: Container(
-          width: size * 0.62,
-          height: size * 0.16,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE2B76C),
-            borderRadius: BorderRadius.circular(size * 0.05),
-          ),
-        ),
-      ),
-    );
-  }
+    ),
+  );
+}
+
 
   /// Positions the Ka'bah glyph on the rim of the dial at the Qibla
   /// bearing, and counter-rotates it so it stays upright as the dial
@@ -352,8 +536,8 @@ class _QiblaScreenState extends State<QiblaScreen>
     final dy = compassSize / 2 + radius * math.sin(paintAngleRad);
 
     return Positioned(
-      left: dx - markerSize / 2,
-      top: dy - markerSize / 2,
+      left: dx - markerSize / 2 + 20,
+      top: dy - markerSize / 2 + 8,
       child: AnimatedRotation(
         turns: counterTurns,
         duration: const Duration(milliseconds: 180),
@@ -488,79 +672,21 @@ class _QiblaScreenState extends State<QiblaScreen>
   /// found. The dial is static (nothing rotates with the phone) and
   /// marks the Qibla bearing; the user aligns it themselves using a
   /// separate compass, a map app, or the sun.
+  /// Manual / "virtual" Qibla mode, shown when no compass sensor was
+  /// found (or when the user manually switches to map view). Shows an
+  /// OpenStreetMap with the user's position, the Ka'bah, and a red
+  /// great-circle line connecting them.
   Widget _buildManualQibla() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = constraints.maxWidth;
-        final compassSize = (screenWidth * 0.7).clamp(200.0, 320.0);
-        final bottomInset = MediaQuery.of(context).padding.bottom;
+    if (_userLat == null || _userLng == null) {
+      return const Center(
+        child: CircularProgressIndicator(color: Color(0xFF1B5E20)),
+      );
+    }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: [
-              const SizedBox(height: 16),
-
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE2B76C).withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE2B76C)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.info_outline,
-                        color: Color(0xFF8D6E63), size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'No magnetic sensor was found on this device, so the '
-                            'dial can\'t rotate automatically. Use a physical '
-                            'compass, a map app, or the sun to find true North, '
-                            'then turn until you face the Ka\'bah marker below.',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: const Color(0xFF8D6E63),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              _buildBearingCard(screenWidth),
-              const SizedBox(height: 28),
-
-              _buildDial(
-                compassSize: compassSize,
-                dialTurns: 0,
-                counterTurns: 0,
-                aligned: false,
-                bearingDeg: _qiblaBearing ?? 0,
-              ),
-              const SizedBox(height: 24),
-
-              _buildAlignmentStatus(aligned: false, manual: true),
-              const SizedBox(height: 12),
-
-              Text(
-                'Align the top of this dial (N) with true North, then walk '
-                    'towards the Ka\'bah marker.',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
-              ),
-              SizedBox(height: 40 + bottomInset),
-            ],
-          ),
-        );
-      },
+    return QiblaMapView(
+      userLat: _userLat!,
+      userLng: _userLng!,
+      noCompassSensor: _noCompassSensor,
     );
   }
 

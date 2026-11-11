@@ -10,16 +10,13 @@ class TasbihScreen extends StatefulWidget {
 }
 
 class _TasbihScreenState extends State<TasbihScreen> {
-  // Current count
+  // Current count for the active dhikr
   int _count = 0;
 
-  // Target (per dhikr cycle). 0 = unlimited (general counter)
-  int _target = 33;
-
-  // Selected dhikr index
+  // Selected dhikr index (0 = Darood-e-Pak)
   int _selectedDhikrIndex = 0;
 
-  // Total lifetime count for this session
+  // Total lifetime count for this session (all dhikr combined)
   int _sessionTotal = 0;
 
   // Preset dhikr list
@@ -28,7 +25,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
       'arabic': 'صَلَّى اللّٰهُ عَلَيْهِ وَسَلَّمَ',
       'transliteration': 'Darood-e-Pak',
       'meaning': 'Peace and blessings upon the Prophet ﷺ',
-      'target': 0, // unlimited — general counter
+      'target': 0, // 0 = unlimited / infinite
     },
     {
       'arabic': 'سُبْحَانَ اللّٰه',
@@ -68,14 +65,23 @@ class _TasbihScreenState extends State<TasbihScreen> {
     },
   ];
 
+  /// Currently selected dhikr map.
   Map<String, dynamic> get _currentDhikr => _dhikrList[_selectedDhikrIndex];
 
-  /// True when the current dhikr is the general/unlimited counter.
-  bool get _isGeneralCounter => _target == 0;
+  /// Target is ALWAYS derived from the selected dhikr — never stored separately,
+  /// so it can never desync. 0 means infinite.
+  int get _target => _currentDhikr['target'] as int;
+
+  /// True when the current dhikr has no cap (Darood-e-Pak, etc.).
+  bool get _isInfinite => _target == 0;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Actions
+  // ─────────────────────────────────────────────────────────────────────────────
 
   void _increment() {
-    // Only block when a target is set AND reached.
-    if (_target > 0 && _count >= _target) return;
+    // Block only when a finite target has been reached.
+    if (!_isInfinite && _count >= _target) return;
 
     HapticFeedback.lightImpact();
 
@@ -84,8 +90,8 @@ class _TasbihScreenState extends State<TasbihScreen> {
       _sessionTotal++;
     });
 
-    // Notify only when a finite target is reached.
-    if (_target > 0 && _count == _target) {
+    // Fire completion feedback only for finite targets.
+    if (!_isInfinite && _count == _target) {
       HapticFeedback.mediumImpact();
       _showTargetReachedSnack();
     }
@@ -93,15 +99,14 @@ class _TasbihScreenState extends State<TasbihScreen> {
 
   void _reset() {
     HapticFeedback.mediumImpact();
-    setState(() {
-      _count = 0;
-    });
+    setState(() => _count = 0);
   }
 
   void _selectDhikr(int index) {
+    if (index == _selectedDhikrIndex) return;
+    HapticFeedback.selectionClick();
     setState(() {
       _selectedDhikrIndex = index;
-      _target = _dhikrList[index]['target'] as int;
       _count = 0;
     });
   }
@@ -123,12 +128,16 @@ class _TasbihScreenState extends State<TasbihScreen> {
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Build
+  // ─────────────────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final isComplete = !_isGeneralCounter && _count >= _target;
-    final progress = _isGeneralCounter
+    final isComplete = !_isInfinite && _count >= _target;
+    final progress = _isInfinite
         ? 0.0
-        : (_target == 0 ? 0.0 : (_count / _target).clamp(0.0, 1.0));
+        : (_count / _target).clamp(0.0, 1.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBF8F1),
@@ -161,10 +170,10 @@ class _TasbihScreenState extends State<TasbihScreen> {
             children: [
               const SizedBox(height: 8),
 
-              // Session total
+              // ── Session total ───────────────────────────────────────────────
               Container(
                 padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -189,7 +198,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Dhikr display card
+              // ── Dhikr display card ──────────────────────────────────────────
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
@@ -232,7 +241,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Counter circle
+              // ── Counter circle ──────────────────────────────────────────────
               GestureDetector(
                 onTap: _increment,
                 child: AnimatedContainer(
@@ -251,8 +260,8 @@ class _TasbihScreenState extends State<TasbihScreen> {
                     boxShadow: [
                       BoxShadow(
                         color: (isComplete
-                            ? const Color(0xFFE2B76C)
-                            : const Color(0xFF1B5E20))
+                                ? const Color(0xFFE2B76C)
+                                : const Color(0xFF1B5E20))
                             .withOpacity(0.15),
                         blurRadius: 24,
                         spreadRadius: 4,
@@ -273,7 +282,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        _isGeneralCounter ? 'unlimited' : 'of $_target',
+                        _isInfinite ? '∞ unlimited' : 'of $_target',
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
@@ -286,8 +295,8 @@ class _TasbihScreenState extends State<TasbihScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Progress bar (hidden for general counter)
-              if (!_isGeneralCounter) ...[
+              // ── Progress bar (hidden when infinite) ─────────────────────────
+              if (!_isInfinite) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: LinearProgressIndicator(
@@ -304,11 +313,11 @@ class _TasbihScreenState extends State<TasbihScreen> {
                 const SizedBox(height: 8),
               ],
               Text(
-                _isGeneralCounter
-                    ? 'General counter — tap freely to keep counting'
+                _isInfinite
+                    ? 'Tap freely — this dhikr has no limit'
                     : isComplete
-                    ? 'Target completed — may Allah accept it'
-                    : 'Tap the circle to count',
+                        ? 'Target completed — may Allah accept it'
+                        : 'Tap the circle to count',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
                   fontSize: 12,
@@ -317,7 +326,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Reset button
+              // ── Reset button ────────────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 52,
@@ -343,7 +352,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Dhikr picker
+              // ── Dhikr picker ────────────────────────────────────────────────
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -365,7 +374,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
                   final dhikr = _dhikrList[index];
                   final isSelected = index == _selectedDhikrIndex;
                   final target = dhikr['target'] as int;
-                  final isGeneral = target == 0;
+                  final isInfinite = target == 0;
 
                   return GestureDetector(
                     onTap: () => _selectDhikr(index),
@@ -390,7 +399,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
                           Expanded(
                             child: Column(
                               crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                                  CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   dhikr['arabic'] as String,
@@ -429,7 +438,7 @@ class _TasbihScreenState extends State<TasbihScreen> {
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: Text(
-                              isGeneral ? '∞' : '× $target',
+                              isInfinite ? '∞' : '× $target',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,

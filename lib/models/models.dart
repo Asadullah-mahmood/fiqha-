@@ -1,89 +1,128 @@
+// ─────────────────────────────────────────────────────────────
+//  SURAH
+// ─────────────────────────────────────────────────────────────
 class Surah {
   final int number;
-  final String name;
-  final String nameArabic;
-  final String nameTranslation;
-  final String revelationType;
-  final int numberOfAyahs;
+  final String name; // Arabic
   final String englishName;
+  final String nameTranslation; // ← used by home screen
+  final int numberOfAyahs;
+  final String? revelationType;
 
-  Surah({
+  const Surah({
     required this.number,
     required this.name,
-    required this.nameArabic,
-    required this.nameTranslation,
-    required this.revelationType,
-    required this.numberOfAyahs,
     required this.englishName,
+    required this.nameTranslation,
+    required this.numberOfAyahs,
+    this.revelationType,
   });
 
-  factory Surah.fromJson(Map<String, dynamic> json) {
-    return Surah(
-      number: json['number'] ?? 0,
-      name: json['name'] ?? '',
-      nameArabic: json['name'] ?? '',
-      nameTranslation: json['englishNameTranslation'] ?? '',
-      revelationType: json['revelationType'] ?? '',
-      numberOfAyahs: json['numberOfAyahs'] ?? 0,
-      englishName: json['englishName'] ?? '',
-    );
-  }
-
-  String get revelationTypeUrdu =>
-      revelationType == 'Meccan' ? 'مکی' : 'مدنی';
+  factory Surah.fromJson(Map<String, dynamic> json) => Surah(
+    number: json['number'] as int,
+    name: json['name'] as String? ?? '',
+    englishName: json['englishName'] as String? ?? '',
+    nameTranslation: json['englishNameTranslation'] as String? ?? '',
+    numberOfAyahs: json['numberOfAyahs'] as int? ?? 0,
+    revelationType: json['revelationType'] as String?,
+  );
 }
 
+// ─────────────────────────────────────────────────────────────
+//  AYAH
+//  Every field below is accessed somewhere in your screens.
+// ─────────────────────────────────────────────────────────────
 class Ayah {
-  final int number;
+  final int number; // global ayah number (1..6236)
   final int numberInSurah;
-  final String text;
-  final String? textUrdu;
-  final String? textEnglish;
   final int surahNumber;
+  final String text; // Arabic
+  final String? urdu;
+  final String? english;
+  final String? translation;
+  final String? secondTranslation;
+  final int juz;
+  final int manzil;
+  final int page;
+  final int? ruku;
   final String? surahName;
   final String? surahEnglishName;
-  final int page;
-  final int juz;
-  final int ruku;
-  final int manzil;
 
-  Ayah({
+  const Ayah({
     required this.number,
     required this.numberInSurah,
-    required this.text,
-    this.textUrdu,
-    this.textEnglish,
     required this.surahNumber,
+    required this.text,
+    this.urdu,
+    this.english,
+    this.translation,
+    this.secondTranslation,
+    required this.juz,
+    required this.manzil,
+    required this.page,
+    this.ruku,
     this.surahName,
     this.surahEnglishName,
-    required this.page,
-    required this.juz,
-    this.ruku = 0,
-    this.manzil = 0,
   });
 
-  factory Ayah.fromJson(Map<String, dynamic> json, {String? urdu, String? english}) {
-    final surahData = json['surah'];
+  /// Remote JSON (used by AlQuran Cloud API when needed).
+  factory Ayah.fromJson(
+    Map<String, dynamic> json, {
+    String? urdu,
+    String? english,
+  }) {
     return Ayah(
-      number: json['number'] ?? 0,
-      numberInSurah: json['numberInSurah'] ?? 0,
-      text: json['text'] ?? '',
-      textUrdu: urdu,
-      textEnglish: english,
-      surahNumber: surahData is Map ? (surahData['number'] ?? 0) : (json['surahNumber'] ?? 0),
-      surahName: surahData is Map ? surahData['name'] : null,
-      surahEnglishName: surahData is Map ? surahData['englishName'] : null,
-      page: json['page'] ?? 0,
-      juz: json['juz'] ?? 0,
-      ruku: json['ruku'] ?? 0,
-      manzil: json['manzil'] ?? 0,
+      number: json['number'] as int? ?? 0,
+      numberInSurah: json['numberInSurah'] as int? ?? 0,
+      surahNumber: (json['surah']?['number'] as int?) ?? 0,
+      text: json['text'] as String? ?? '',
+      urdu: urdu,
+      english: english,
+      translation: json['translation'] as String?,
+      juz: json['juz'] as int? ?? 1,
+      manzil: json['manzil'] as int? ?? 1,
+      page: json['page'] as int? ?? 1,
+      ruku: json['ruku'] as int?,
+      surahName: json['surah']?['name'] as String?,
+      surahEnglishName: json['surah']?['englishName'] as String?,
+    );
+  }
+
+  /// Row coming from a JOIN of `ayahs`, `translations`, and `surahs`.
+  /// [surahName] and [surahEnglishName] are provided by the repository.
+  factory Ayah.fromMap(
+    Map<String, dynamic> row, {
+    required int surahNumber,
+    required String surahName,
+    required String surahEnglishName,
+  }) {
+    final numberInSurah = row['number_in_surah'] as int? ?? 0;
+    return Ayah(
+      // Global ayah number approximation (safe composite, unique per ayah)
+      number: surahNumber * 1000 + numberInSurah,
+      numberInSurah: numberInSurah,
+      surahNumber: surahNumber,
+      text: row['arabic_text'] as String? ?? '',
+      urdu: row['urdu_text'] as String?,
+      english: row['english_text'] as String?,
+      translation: row['translation_text'] as String?,
+      secondTranslation: row['second_translation_text'] as String?,
+      juz: row['juz'] as int? ?? 1,
+      manzil: row['manzil'] as int? ?? 1,
+      page: row['page'] as int? ?? 1,
+      ruku: row['ruku'] as int?,
+      surahName: surahName,
+      surahEnglishName: surahEnglishName,
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+//  SURAH DETAIL
+// ─────────────────────────────────────────────────────────────
 class SurahDetail {
   final Surah surah;
   final List<Ayah> ayahs;
 
-  SurahDetail({required this.surah, required this.ayahs});
+  const SurahDetail({required this.surah, required this.ayahs});
 }

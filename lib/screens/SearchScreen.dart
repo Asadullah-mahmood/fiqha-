@@ -36,7 +36,10 @@ class _SearchScreenState extends State<SearchScreen> {
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
-        title: const Text('Search', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'Search',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         backgroundColor: AppTheme.primary,
         foregroundColor: Colors.white,
         bottom: PreferredSize(
@@ -85,11 +88,28 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.search_off, size: 80, color: AppTheme.primary.withOpacity(0.2)),
+                  Icon(
+                    Icons.search_off,
+                    size: 80,
+                    color: AppTheme.primary.withOpacity(0.2),
+                  ),
                   const SizedBox(height: 16),
+
+                  const Text(
+                    'No Search result found',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: AppTheme.textSecondary,
+                    ),
+                    textScaler: TextScaler.linear(1),
+                  ),
                   const Text(
                     'کوئی نتیجہ نہیں ملا',
-                    style: TextStyle(fontSize: 18, color: AppTheme.textSecondary),
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: AppTheme.textSecondary,
+                    ),
+                    textScaler: TextScaler.linear(1),
                   ),
                 ],
               ),
@@ -105,7 +125,8 @@ class _SearchScreenState extends State<SearchScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => SurahReaderScreen(surahNumber: surah.number),
+                        builder: (_) =>
+                            SurahReaderScreen(surahNumber: surah.number),
                       ),
                     );
                   },

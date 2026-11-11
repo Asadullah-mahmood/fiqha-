@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 class AudioDownloadService {
@@ -25,12 +26,11 @@ class AudioDownloadService {
     required String reciterId,
     required int surahNumber,
     required int ayahNumber,
-  }) =>
-      _filePath(
-        reciterId: reciterId,
-        surahNumber: surahNumber,
-        ayahNumber: ayahNumber,
-      );
+  }) => _filePath(
+    reciterId: reciterId,
+    surahNumber: surahNumber,
+    ayahNumber: ayahNumber,
+  );
 
   // ─────────────────────────────────────────────────────────────
   // DOWNLOAD
@@ -103,8 +103,7 @@ class AudioDownloadService {
     required int surahNumber,
   }) async {
     final dir = await getApplicationDocumentsDirectory();
-    final audioDir =
-    Directory('${dir.path}/quran_audio/$reciterId/$surahNumber');
+    final audioDir = Directory('${dir.path}/quran_audio/$reciterId/$surahNumber');
     if (await audioDir.exists()) {
       await audioDir.delete(recursive: true);
     }
@@ -131,7 +130,7 @@ class AudioDownloadService {
     final result = <String>[];
     await for (final entity in root.list()) {
       if (entity is Directory) {
-        final name = entity.path.split('/').last;
+        final name = p.basename(entity.path);
         // Only include if it has at least one non-empty surah folder
         final surahs = await entity.list().toList();
         if (surahs.any((e) => e is Directory)) result.add(name);
@@ -149,12 +148,12 @@ class AudioDownloadService {
     final surahs = <int>[];
     await for (final entity in reciterDir.list()) {
       if (entity is Directory) {
-        final num = int.tryParse(entity.path.split('/').last);
+        final num = int.tryParse(p.basename(entity.path));
         if (num != null) {
           // Verify at least one ayah file exists
-          final hasAyahs = await entity
-              .list()
-              .any((f) => f is File && f.path.endsWith('.mp3'));
+          final hasAyahs = await entity.list().any(
+            (f) => f is File && f.path.endsWith('.mp3'),
+          );
           if (hasAyahs) surahs.add(num);
         }
       }
@@ -166,8 +165,7 @@ class AudioDownloadService {
   /// Count ayahs downloaded for a given (reciter, surah).
   Future<int> countAyahs(String reciterId, int surahNumber) async {
     final dir = await getApplicationDocumentsDirectory();
-    final surahDir =
-    Directory('${dir.path}/quran_audio/$reciterId/$surahNumber');
+    final surahDir = Directory('${dir.path}/quran_audio/$reciterId/$surahNumber');
     if (!await surahDir.exists()) return 0;
 
     int count = 0;

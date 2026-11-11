@@ -56,6 +56,7 @@ class QuranAudioPlayer extends ChangeNotifier {
   Duration _position = Duration.zero;
   Duration? _duration;
   Duration get position => _position;
+  bool _singleMode = false;
 
 
   // ── Subscriptions ──
@@ -174,6 +175,10 @@ class QuranAudioPlayer extends ChangeNotifier {
   String? get currentSurahName => _currentSurahName;
   bool get isPlaying => _isPlaying;
 
+  static const double kPlaybackRate = 0.75;   // 1.0 = normal; lower = slower
+  double _rate = kPlaybackRate;
+  double get playbackRate => _rate;
+
   // ── Full-surah download state ──
   SurahDownloadState _downloadState = SurahDownloadState.idle;
   int _downloadedCount = 0;
@@ -216,33 +221,42 @@ class QuranAudioPlayer extends ChangeNotifier {
         // Do NOT notifyListeners here — too frequent, stutters the UI
       }));
 
-      _subs.add(p.onDurationChanged.listen((d) {if (k != _activeIdx) return;
-      _duration = d;
-      _durationCtrl.add(d);
+      // _subs.add(p.onDurationChanged.listen((d) {if (k != _activeIdx) return;
+      // _duration = d;
+      // _durationCtrl.add(d);
+
+      _subs.add(p.onDurationChanged.listen((d) {
+        if (k != _activeIdx) return;
+        if (d.inMilliseconds < 1000) return; // ignore metadata glitches
+        _duration = d;
+        _durationTrusted = true;
+        _durationCtrl.add(d);
+        notifyListeners();
+      }));
 
       // ✅ Ignore tiny durations (metadata glitch); try again after 2s of playback
-      if (d.inSeconds > 5) {
-        _durationTrusted = true;
-        notifyListeners();
-      } else {
-        _durationTrusted = false;
-        _durationTimer?.cancel();
-
-        // Add 'async' to the Timer callback here
-        _durationTimer = Timer(const Duration(seconds: 2), () async {
-          if (k != _activeIdx) return;
-
-          // FIX: Change 'p.duration' to 'await p.getDuration()'
-          final real = await p.getDuration();
-          if (real != null && real.inSeconds > 5) {
-            _duration = real;
-            _durationTrusted = true;
-            _durationCtrl.add(real);
-            notifyListeners();
-          }
-        });
-      }
-      }));
+      // if (d.inSeconds > 5) {
+      //   _durationTrusted = true;
+      //   notifyListeners();
+      // } else {
+      //   _durationTrusted = false;
+      //   _durationTimer?.cancel();
+      //
+      //   // Add 'async' to the Timer callback here
+      //   _durationTimer = Timer(const Duration(seconds: 2), () async {
+      //     if (k != _activeIdx) return;
+      //
+      //     // FIX: Change 'p.duration' to 'await p.getDuration()'
+      //     final real = await p.getDuration();
+      //     if (real != null && real.inSeconds > 5) {
+      //       _duration = real;
+      //       _durationTrusted = true;
+      //       _durationCtrl.add(real);
+      //       notifyListeners();
+      //     }
+      //   });
+      // }
+      // }));
 
 
       _subs.add(p.onPlayerComplete.listen((_) {
@@ -269,6 +283,17 @@ class QuranAudioPlayer extends ChangeNotifier {
     }
   }
 
+  Future<void> _playWithRate(AudioPlayer p, Source src) async {
+    await p.setPlaybackRate(_rate);   // set BEFORE play: no normal-speed blip
+    await p.play(src);
+    await p.setPlaybackRate(_rate);   // some platforms reset the rate on start
+  }
+
+  Future<void> setPlaybackRate(double r) async {
+    _rate = r.clamp(0.5, 1.0);
+    for (final p in _players) { await p.setPlaybackRate(_rate); }
+    notifyListeners();
+  }
 
 
   void setReciter(Reciter reciter) {
@@ -548,15 +573,23 @@ class QuranAudioPlayer extends ChangeNotifier {
     _downloadState = SurahDownloadState.playing;
     notifyListeners();
 
+    // try {
+    //   await _active.play(DeviceFileSource(_paths[idx]));
+    //   await _active.setPlaybackRate(0.85);
+    // } catch (e) {
+    //   debugPrint('❌ Play failed for ayah ${_playlist[idx]}: $e');
+    //   // Skip ahead instead of dying
+    //   if (idx + 1 < _playlist.length) {
+    //     await _playIndexDirect(idx + 1);
+    //   }
+    //   return;
+    // }
+
     try {
-      await _active.play(DeviceFileSource(_paths[idx]));
-    } catch (e) {
-      debugPrint('❌ Play failed for ayah ${_playlist[idx]}: $e');
-      // Skip ahead instead of dying
-      if (idx + 1 < _playlist.length) {
-        await _playIndexDirect(idx + 1);
-      }
-      return;
+      await _active.setPlaybackRate(_rate);
+      await _active.resume();
+    } catch (_) {
+      await _playWithRate(_active, DeviceFileSource(_paths[idx]));
     }
     _preloadNext();
   }
@@ -610,8 +643,10 @@ class QuranAudioPlayer extends ChangeNotifier {
         // ✅ Try resume first (fast path), fall back to play() if needed
         try {
           await _active.resume();
+          await _active.setPlaybackRate(0.85);
         } catch (_) {
           await _active.play(DeviceFileSource(_paths[idx]));
+          await _active.setPlaybackRate(0.85);
         }
 
         notifyListeners();
@@ -624,6 +659,16 @@ class QuranAudioPlayer extends ChangeNotifier {
   }
 
   Future<void> _onAyahComplete() async {
+    if (_singleMode) {
+      _isPlaying = false;
+      _currentAyah = null;            // so the next tap starts fresh
+      _position = Duration.zero;
+      _positionCtrl.add(Duration.zero);
+      _downloadState = SurahDownloadState.idle;
+      notifyListeners();
+      return;
+    }
+
     if (_playlist.isEmpty) return;
     final nextIdx = _playlistIndex + 1;
     if (nextIdx >= _playlist.length) {
@@ -674,6 +719,117 @@ class QuranAudioPlayer extends ChangeNotifier {
     } else {
       await _playIndexDirect(idx);
     }
+  }
+
+  /// Play a single individual ayah directly (streaming or cached)
+  // Future<void> playSingleAyah({
+  //   required int surahNumber,
+  //   required int ayahNumber,
+  //   String? surahName,
+  // }) async {
+  //   // If this ayah is already playing, toggle pause/resume
+  //   if (_currentSurah == surahNumber && _currentAyah == ayahNumber && _isPlaying) {
+  //     await pause();
+  //     return;
+  //   } else if (_currentSurah == surahNumber && _currentAyah == ayahNumber && !_isPlaying) {
+  //     await resume();
+  //     return;
+  //   }
+  //
+  //   await stop();
+  //   _currentSurah = surahNumber;
+  //   _currentAyah = ayahNumber;
+  //   _currentSurahName = surahName ?? 'Surah $surahNumber';
+  //   _downloadState = SurahDownloadState.playing;
+  //   _position = Duration.zero;
+  //   notifyListeners();
+  //
+  //   try {
+  //     final isDownloaded = await _downloader.isDownloaded(
+  //       reciterId: _selectedReciter.id,
+  //       surahNumber: surahNumber,
+  //       ayahNumber: ayahNumber,
+  //     );
+  //
+  //     if (isDownloaded) {
+  //       final filePath = await _downloader.resolvePath(
+  //         reciterId: _selectedReciter.id,
+  //         surahNumber: surahNumber,
+  //         ayahNumber: ayahNumber,
+  //       );
+  //       await _active.play(DeviceFileSource(filePath));
+  //     } else {
+  //       final url = _selectedReciter.ayahUrl(surahNumber, ayahNumber);
+  //       await _active.play(UrlSource(url));
+  //     }
+  //   } catch (e) {
+  //     debugPrint('Error playing single ayah: $e');
+  //     _isPlaying = false;
+  //     _downloadState = SurahDownloadState.error;
+  //     notifyListeners();
+  //   }
+  // }
+
+  Future<void> playSingleAyah({
+    required int surahNumber,
+    required int ayahNumber,
+    String? surahName,
+  }) async {
+    final same = _singleMode &&
+        _currentSurah == surahNumber &&
+        _currentAyah == ayahNumber;
+
+    // Tap while playing = pause, tap while paused = resume
+    if (same && _isPlaying) { await pause(); return; }
+    if (same && !_isPlaying) { await resume(); return; }
+
+    // Anything else (including a finished verse) = fresh play from the start
+    await stop();
+    _singleMode = true;
+    _currentSurah = surahNumber;
+    _currentAyah = ayahNumber;
+    _currentSurahName = surahName ?? 'Surah $surahNumber';
+    _downloadState = SurahDownloadState.playing;
+    _position = Duration.zero;
+    _duration = null;                 // drop the previous verse's duration
+    _durationTrusted = false;
+    notifyListeners();
+
+    try {
+      final isDownloaded = await _downloader.isDownloaded(
+        reciterId: _selectedReciter.id,
+        surahNumber: surahNumber,
+        ayahNumber: ayahNumber,
+      );
+      if (isDownloaded) {
+        final filePath = await _downloader.resolvePath(
+          reciterId: _selectedReciter.id,
+          surahNumber: surahNumber,
+          ayahNumber: ayahNumber,
+        );
+        await _playWithRate(_active, DeviceFileSource(filePath));
+      } else {
+        await _playWithRate(_active, UrlSource(_selectedReciter.ayahUrl(surahNumber, ayahNumber)));
+      }
+
+      // Fallback in case onDurationChanged was missed
+      final d = await _active.getDuration();
+      if (d != null && d.inMilliseconds >= 1000 && _currentAyah == ayahNumber) {
+        _duration = d;
+        _durationTrusted = true;
+        _durationCtrl.add(d);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('Error playing single ayah: $e');
+      _isPlaying = false;
+      _downloadState = SurahDownloadState.error;
+      notifyListeners();
+    }
+  }
+
+  bool isAyahPlaying(int surahNumber, int ayahNumber) {
+    return _currentSurah == surahNumber && _currentAyah == ayahNumber && _isPlaying;
   }
 
   Future<void> next() async => _advanceTo(_playlistIndex + 1);

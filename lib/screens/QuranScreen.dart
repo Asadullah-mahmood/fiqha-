@@ -1,3 +1,6 @@
+import 'package:quranpak/screens/TranslationQuranReaderScreen.dart';
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,17 +11,20 @@ import 'package:quranpak/screens/SurahReaderScreen.dart';
 import 'package:quranpak/utils/AppTheme.dart';
 import 'package:quranpak/utils/QuranProvider.dart';
 import 'package:quranpak/widgets/customIcons.dart';
+import 'package:quranpak/widgets/TranslationLanguageTabs.dart';
 import 'package:toastification/toastification.dart';
 
-import '../utils/QuranAudioPlayer.dart';
+import '../models/FullSurahReciter.dart';
+import '../services/FullSurahDownloadProvider.dart';
+import '../models/LastReadProgress.dart';
+import '../utils/LastReadProvider.dart';
+import '../utils/FullSurahPlayer.dart';
 
 class QuranHomeScreen extends StatefulWidget {
   const QuranHomeScreen({super.key});
 
-
   @override
   State<QuranHomeScreen> createState() => _QuranHomeScreenState();
-
 }
 
 class _QuranHomeScreenState extends State<QuranHomeScreen>
@@ -26,23 +32,69 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
   late TabController _tabController;
 
   final List<String> juzNames = [
-    "Alif Lam Meem", "Sayaqool", "Tilkal Rusul", "Lan Tana Loo",
-    "Wal Mohsanat", "La Yuhibbullah", "Wa Iza Samiu", "Wa Lau Annana",
-    "Qalal Malao", "Wa'lamu", "Ya'taziroon", "Wa Ma Min Daabbatin",
-    "Wa Ma Ubabrioo", "Rubama", "Subhanallazi", "Qala Alam",
-    "Iqtaraba Linnasi", "Qad Aflaha", "Wa Qalallazina", "Amman Khalaqa",
-    "Utlu Ma Oohiya", "Wa Man Yaqnut", "Wa Maliya", "Faman Azlamu",
-    "Ilaihi Yuraddu", "Ha Meem", "Qala Fama Khatbukum", "Qad Sami Allah",
-    "Tabarakallazi", "Amma Yatasa'aloon",
+    "Alif Lam Meem",
+    "Sayaqool",
+    "Tilkal Rusul",
+    "Lan Tana Loo",
+    "Wal Mohsanat",
+    "La Yuhibbullah",
+    "Wa Iza Samiu",
+    "Wa Lau Annana",
+    "Qalal Malao",
+    "Wa'lamu",
+    "Ya'taziroon",
+    "Wa Ma Min Daabbatin",
+    "Wa Ma Ubabrioo",
+    "Rubama",
+    "Subhanallazi",
+    "Qala Alam",
+    "Iqtaraba Linnasi",
+    "Qad Aflaha",
+    "Wa Qalallazina",
+    "Amman Khalaqa",
+    "Utlu Ma Oohiya",
+    "Wa Man Yaqnut",
+    "Wa Maliya",
+    "Faman Azlamu",
+    "Ilaihi Yuraddu",
+    "Ha Meem",
+    "Qala Fama Khatbukum",
+    "Qad Sami Allah",
+    "Tabarakallazi",
+    "Amma Yatasa'aloon",
   ];
 
   final List<String> juzNamesUrdu = [
-    "الف لآم میم", "سیقول", "تلك الرسل", "لن تنالوا", "والحصنت",
-    "لا یحب اللہ", "و اذا سمعوا", "و لو اننا", "قال الملأ", "واعلموا",
-    "یعتذرون", "و ما من دآبۃ", "و ما ابرئ", "ربما", "سبحن الذی",
-    "قال الم", "اقترب للناس", "قد افلح", "و قال الذین", "امن خلق",
-    "اتل ما اوحی", "و من یقنت", "و مالی", "فمن اظلم", "الیہ یرد",
-    "حم", "قال فما خطبکم", "قد سمع اللہ", "تبارك الذی", "عم یتسآءلون",
+    "الف لآم میم",
+    "سیقول",
+    "تلك الرسل",
+    "لن تنالوا",
+    "والحصنت",
+    "لا یحب اللہ",
+    "و اذا سمعوا",
+    "و لو اننا",
+    "قال الملأ",
+    "واعلموا",
+    "یعتذرون",
+    "و ما من دآبۃ",
+    "و ما ابرئ",
+    "ربما",
+    "سبحن الذی",
+    "قال الم",
+    "اقترب للناس",
+    "قد افلح",
+    "و قال الذین",
+    "امن خلق",
+    "اتل ما اوحی",
+    "و من یقنت",
+    "و مالی",
+    "فمن اظلم",
+    "الیہ یرد",
+    "حم",
+    "قال فما خطبکم",
+    "قد سمع اللہ",
+    "تبارك الذی",
+    "عم یتسآءلون",
   ];
 
   @override
@@ -57,104 +109,110 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
     super.dispose();
   }
 
-  Future<void> _onPlaySurahTap(BuildContext context, dynamic surah) async {
-    final player = context.read<QuranAudioPlayer>();
-    final surahNumber = surah.number as int;
-    final totalAyahs = surah.numberOfAyahs as int;
-    final surahName = surah.englishName as String? ?? 'Surah';
+  Future<void> _playSurah(
+    BuildContext context,
+    int surahNumber,
+    String surahName,
+  ) async {
+    final dl = context.read<FullSurahDownloadProvider>();
+    final player = context.read<FullSurahPlayer>();
 
-    // ── CASE 1: this surah is currently playing → pause ──
-    if (player.isPlayingSurah(surahNumber)) {
-      await player.pause();
-      return;
-    }
-
-    // ── CASE 2: this surah is paused → resume ──
-    if (player.isPausedSurah(surahNumber)) {
-      await player.resume();
-      return;
-    }
-
-    // ── CASE 3: this surah is currently downloading → ignore taps ──
-    if (player.isDownloadingSurah(surahNumber)) {
-      return;
-    }
-
-    // ── CASE 4: fully cached for the selected reciter → play instantly ──
-    final fullyCached = await player.isSurahFullyCached(
+    // ── 1. Ask the user which reciter to use ──
+    final reciter = await _showFullSurahReciterPicker(
+      context,
       surahNumber: surahNumber,
-      totalAyahs: totalAyahs,
+      surahName: surahName,
+    );
+    if (reciter == null) return; // user cancelled
+    if (!context.mounted) return;
+
+    // ── 2. Remember the choice ──
+    await dl.setDefaultReciter(reciter.id);
+
+    // ── 3. Check if downloaded. If not, download first then play. ──
+    final downloaded = await dl.isSurahDownloaded(
+      surahNumber,
+      reciterId: reciter.id,
     );
 
-    if (fullyCached) {
-      await player.playCachedSurah(
+    if (downloaded) {
+      await player.playDownloaded(
         surahNumber: surahNumber,
-        totalAyahs: totalAyahs,
+        reciterId: reciter.id,
         surahName: surahName,
       );
-      return;
-    }
-
-    // ── CASE 5: not cached → show reciter picker ──
-    if (!context.mounted) return;
-    final pickedReciter = await _showReciterPickerSheet(context, surah);
-
-    if (pickedReciter == null) return; // user dismissed
-    if (!context.mounted) return;
-
-    // Check cache for the PICKED reciter
-    final cachedForPicked = await player.isSurahFullyCached(
-      surahNumber: surahNumber,
-      totalAyahs: totalAyahs,
-      reciterId: pickedReciter.id,
-    );
-
-    if (!context.mounted) return;
-
-    if (cachedForPicked) {
-      // Already cached for this reciter → instant play
-      await player.playCachedSurah(
-        surahNumber: surahNumber,
-        totalAyahs: totalAyahs,
-        surahName: surahName,
-      );
-      return;
-    }
-
-    // ── CASE 6: download + play ──
-    try {
-      await player.downloadAndPlaySurah(
-        surahNumber: surahNumber,
-        totalAyahs: totalAyahs,
-        surahName: surahName,
-      );
-    } catch (e) {
       if (!context.mounted) return;
       toastification.show(
-        type: ToastificationType.error,
-        title: Text('Download failed: $e'),
         context: context,
+        type: ToastificationType.success,
+        style: ToastificationStyle.flatColored,
+        title: const Text('Playing Tilawat'),
+        description: Text('${reciter.name} • $surahName'),
+        autoCloseDuration: const Duration(seconds: 2),
+        icon: const Icon(Icons.play_circle_fill),
       );
+    } else {
+      if (!context.mounted) return;
+      toastification.show(
+        context: context,
+        type: ToastificationType.info,
+        style: ToastificationStyle.flatColored,
+        title: const Text('Downloading Tilawat...'),
+        description: Text('Downloading $surahName for ${reciter.name}'),
+        autoCloseDuration: const Duration(seconds: 3),
+        icon: const Icon(Icons.cloud_download),
+      );
+
+      try {
+        await dl.downloadSurah(surahNumber, reciterId: reciter.id);
+        if (!context.mounted) return;
+        await player.playDownloaded(
+          surahNumber: surahNumber,
+          reciterId: reciter.id,
+          surahName: surahName,
+        );
+        if (!context.mounted) return;
+        toastification.show(
+          context: context,
+          type: ToastificationType.success,
+          style: ToastificationStyle.flatColored,
+          title: const Text('Download complete'),
+          description: Text('Now playing \ (\)'),
+          autoCloseDuration: const Duration(seconds: 2),
+          icon: const Icon(Icons.offline_pin),
+        );
+      } catch (e) {
+        if (!context.mounted) return;
+        toastification.show(
+          context: context,
+          type: ToastificationType.error,
+          style: ToastificationStyle.flatColored,
+          title: const Text('Download failed'),
+          description: Text('Could not download audio: '),
+          autoCloseDuration: const Duration(seconds: 3),
+          icon: const Icon(Icons.error_outline),
+        );
+      }
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(statusBarIconBrightness: Brightness.dark, statusBarBrightness: Brightness.light));
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+    );
     return ColoredBox(
-        color: AppTheme.background,
-        child: SafeArea(
-          bottom: false,
-          child: Stack(
-            children: [
-              _buildMainList(),
-              const _DownloadProgressOverlay(),
-            ],
-          ),
+      color: AppTheme.background,
+      child: SafeArea(
+        bottom: false,
+        child: Stack(
+          children: [_buildMainList(), const _DownloadProgressOverlay()],
         ),
-      );
+      ),
+    );
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -166,7 +224,7 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
         return NestedScrollView(
           headerSliverBuilder: (context, innerBoxIsScrolled) {
             return [
-          //    SliverToBoxAdapter(child: _buildTopHeader()),
+              //    SliverToBoxAdapter(child: _buildTopHeader()),
               SliverToBoxAdapter(child: _buildTitleRow()),
               SliverToBoxAdapter(child: _buildTabPills()),
               SliverToBoxAdapter(child: _buildLastRecitedCard()),
@@ -185,8 +243,6 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
     );
   }
 
-
-
   // ─────────────────────────────────────────────────────────────
   // TITLE ROW
   // ─────────────────────────────────────────────────────────────
@@ -194,46 +250,385 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       child: Row(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  'DIVINE RECITATION',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 2,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.gold,
-                  ),
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'DIVINE RECITATION',
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.gold,
                 ),
-                Text(
-                  'Holy Quran',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.primary,
-                    height: 1.2,
-                  ),
+                textScaler: TextScaler.linear(1),
+              ),
+              const Text(
+                'Al-Quran al-Kareem',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primary,
+                  height: 1.2,
                 ),
-              ],
-            ),
-            const Spacer(),
-            _circleIcon(customIcons.search),
-          ],
-        ),
+                textScaler: TextScaler.linear(1),
+              ),
+            ],
+          ),
+          const Spacer(),
+          _translationIcon(),
+          const SizedBox(width: 8),
+          _circleIcon(customIcons.search),
+        ],
+      ),
     );
   }
 
   Widget _circleIcon(IconData icon) {
     return InkWell(
       radius: 20,
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => SearchScreen(),)),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => SearchScreen()),
+      ),
       child: Container(
         width: 40,
         height: 40,
-        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
         child: Icon(icon, size: 26, color: AppTheme.primary),
+      ),
+    );
+  }
+
+  Widget _translationIcon() {
+    return Consumer<QuranProvider>(
+      builder: (context, provider, _) {
+        if (!provider.translationEnabled) return const SizedBox.shrink();
+        return InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _showTranslationPicker,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.translate,
+              size: 23,
+              color: AppTheme.primary,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showTranslationPicker() {
+    final provider = context.read<QuranProvider>();
+    var query = '';
+    var selectedLanguage = provider.selectedTranslationEdition
+        .split('.')
+        .first
+        .toLowerCase();
+    var selectedEditions = List<String>.from(
+      provider.selectedTranslationEditions,
+    );
+    unawaited(provider.loadTranslationEditions());
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (sheetContext) => Consumer<QuranProvider>(
+        builder: (context, translationProvider, _) => StatefulBuilder(
+          builder: (context, setSheetState) {
+            final languages =
+                translationProvider.translationEditions
+                    .map((edition) => edition.language.toLowerCase())
+                    .where((language) => language.isNotEmpty)
+                    .toSet()
+                    .toList()
+                  ..sort(
+                    (a, b) => translationLanguageLabel(
+                      a,
+                    ).compareTo(translationLanguageLabel(b)),
+                  );
+            if (!languages.contains(selectedLanguage)) {
+              selectedLanguage = 'all';
+            }
+            final filteredEditions = translationProvider.translationEditions
+                .where((edition) {
+                  final normalizedQuery = query.toLowerCase().trim();
+                  final language = edition.language.toLowerCase();
+                  final matchesLanguage =
+                      selectedLanguage == 'all' || language == selectedLanguage;
+                  final matchesQuery =
+                      normalizedQuery.isEmpty ||
+                      language.contains(normalizedQuery) ||
+                      edition.name.toLowerCase().contains(normalizedQuery) ||
+                      edition.englishName.toLowerCase().contains(
+                        normalizedQuery,
+                      ) ||
+                      edition.identifier.toLowerCase().contains(
+                        normalizedQuery,
+                      );
+                  return matchesLanguage && matchesQuery;
+                })
+                .toList();
+
+            return SafeArea(
+              child: SizedBox(
+                height: MediaQuery.of(context).size.height * 0.82,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 12, 8),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Translations',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Refresh available translations',
+                            onPressed:
+                                translationProvider.loadingTranslationEditions
+                                ? null
+                                : () => unawaited(
+                                    translationProvider.loadTranslationEditions(
+                                      refresh: true,
+                                    ),
+                                  ),
+                            icon: const Icon(Icons.refresh),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Search language or translator',
+                          prefixIcon: const Icon(Icons.search),
+                          filled: true,
+                          fillColor: AppTheme.surfaceContainer,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setSheetState(() {
+                            query = value;
+                          });
+                        },
+                      ),
+                    ),
+                    TranslationLanguageTabs(
+                      languages: languages,
+                      selectedLanguage: selectedLanguage,
+                      onSelected: (language) {
+                        setSheetState(() => selectedLanguage = language);
+                      },
+                    ),
+                    if (translationProvider.translationError != null)
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          translationProvider.translationError!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    if (translationProvider.downloadingTranslationEdition !=
+                        null)
+                      const LinearProgressIndicator(color: AppTheme.primary),
+                    if (translationProvider.loadingTranslationEditions &&
+                        translationProvider.translationEditions.isEmpty)
+                      const Expanded(
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      )
+                    else if (filteredEditions.isEmpty)
+                      const Expanded(
+                        child: Center(
+                          child: Text('No matching translation editions.'),
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: filteredEditions.length,
+                          itemBuilder: (context, index) {
+                            final edition = filteredEditions[index];
+                            final selected = selectedEditions.contains(
+                              edition.identifier,
+                            );
+                            final downloaded = translationProvider
+                                .downloadedTranslationEditions
+                                .contains(edition.identifier);
+                            final downloading =
+                                translationProvider
+                                    .downloadingTranslationEdition ==
+                                edition.identifier;
+                            final languageLabel =
+                                translationEditionLanguageLabel(
+                                  edition.language,
+                                  edition.name,
+                                );
+                            return ListTile(
+                              leading: Icon(
+                                downloaded
+                                    ? Icons.offline_pin
+                                    : Icons.translate,
+                                color: AppTheme.primary,
+                              ),
+                              title: Text(
+                                edition.englishName.isNotEmpty
+                                    ? edition.englishName
+                                    : edition.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Text(
+                                languageLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (downloading)
+                                    const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  else
+                                    IconButton(
+                                      tooltip: downloaded
+                                          ? 'Downloaded'
+                                          : 'Download $languageLabel translation',
+                                      onPressed:
+                                          downloaded ||
+                                              translationProvider
+                                                      .downloadingTranslationEdition !=
+                                                  null
+                                          ? null
+                                          : () => unawaited(
+                                              translationProvider
+                                                  .downloadTranslationEdition(
+                                                    edition.identifier,
+                                                  ),
+                                            ),
+                                      icon: Icon(
+                                        downloaded
+                                            ? Icons.download_done
+                                            : Icons.download_outlined,
+                                      ),
+                                      color: downloaded
+                                          ? AppTheme.primary
+                                          : AppTheme.textSecondary,
+                                    ),
+                                  Icon(
+                                    selected
+                                        ? Icons.check_circle
+                                        : Icons.radio_button_unchecked,
+                                    color: selected
+                                        ? AppTheme.primary
+                                        : AppTheme.textSecondary,
+                                  ),
+                                ],
+                              ),
+                              onTap: () {
+                                if (selected) {
+                                  setSheetState(
+                                    () => selectedEditions.remove(
+                                      edition.identifier,
+                                    ),
+                                  );
+                                } else if (selectedEditions.length < 2) {
+                                  setSheetState(
+                                    () => selectedEditions.add(
+                                      edition.identifier,
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'You can select up to two translations.',
+                                      ),
+                                    ),
+                                  );
+                                  return;
+                                }
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed:
+                              translationProvider
+                                      .downloadingTranslationEdition !=
+                                  null
+                              ? null
+                              : () async {
+                                  final saved = await translationProvider
+                                      .setSelectedTranslationEditions(
+                                        selectedEditions,
+                                      );
+                                  if (saved && sheetContext.mounted) {
+                                    Navigator.pop(sheetContext);
+                                  }
+                                },
+                          child: Text(
+                            translationProvider.downloadingTranslationEdition !=
+                                    null
+                                ? 'Downloading ${translationProvider.downloadingTranslationEdition}...'
+                                : 'Apply ${selectedEditions.length} translation${selectedEditions.length == 1 ? '' : 's'}',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -244,23 +639,28 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
   Widget _buildTabPills() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceContainer,
-          borderRadius: BorderRadius.circular(50),
-        ),
-        child: Row(
-          children: [
-            _pillTab(label: 'Surah', index: 0),
-            _pillTab(label: 'Juz (Paras)', index: 1),
-          ],
-        ),
+      child: Column(
+        children: [
+          // ── Surah vs Juz (Paras) Tabs ──
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(50),
+            ),
+            child: Row(
+              children: [
+                pillTab(label: 'Surah', index: 0),
+                pillTab(label: 'Juz (Paras)', index: 1),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _pillTab({required String label, required int index}) {
+  Widget pillTab({required String label, required int index}) {
     final selected = _tabController.index == index;
     return Expanded(
       child: GestureDetector(
@@ -294,93 +694,146 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
   // LAST RECITED CARD
   // ─────────────────────────────────────────────────────────────
   Widget _buildLastRecitedCard() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppTheme.primaryDark, AppTheme.primary],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.primary.withOpacity(0.35),
-              blurRadius: 20,
-              offset: const Offset(0, 8),
+    return Consumer<LastReadProvider>(
+      builder: (context, lastReadProvider, _) {
+        final progress = lastReadProvider.progress;
+        final surahName = progress == null
+            ? 'Al-Fatihah'
+            : progress.surahEnglishName.isNotEmpty
+            ? progress.surahEnglishName
+            : 'Surah ${progress.surahNumber}';
+        final juzNumber = progress?.juzNumber ?? 1;
+        final juzName = juzNames[juzNumber - 1];
+        final details = progress == null
+            ? 'Start at Ayah 1 • Juz 1 · $juzName'
+            : 'Ayah ${progress.ayahNumber} • Juz $juzNumber · $juzName';
+
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppTheme.primaryDark, AppTheme.primary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withOpacity(0.35),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: AppTheme.gold,
-                          shape: BoxShape.circle,
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              color: AppTheme.gold,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            progress == null
+                                ? 'START RECITING'
+                                : 'LAST RECITED',
+                            style: TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 1.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.gold,
+                            ),
+                            textScaler: TextScaler.linear(1),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'LAST RECITED',
+                      const SizedBox(height: 6),
+                      Text(
+                        'Surah $surahName',
                         style: TextStyle(
-                          fontSize: 10,
-                          letterSpacing: 1.5,
+                          fontSize: 20,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.gold,
+                          color: Colors.white,
                         ),
+                        textScaler: TextScaler.linear(1),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        details,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white.withOpacity(0.75),
+                        ),
+                        textScaler: TextScaler.linear(1),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Surah Al-Kahf',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Ayah 10 • Juz 15',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.white.withOpacity(0.75),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.gold,
-                foregroundColor: AppTheme.primaryDark,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50),
                 ),
-                padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                elevation: 3,
-              ),
-              icon: const Text(
-                'Continue',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              label: const Icon(Icons.play_arrow, size: 18),
+                ElevatedButton.icon(
+                  onPressed: () => openLastRead(progress),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.gold,
+                    foregroundColor: AppTheme.primaryDark,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(50),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
+                    elevation: 3,
+                  ),
+                  icon: Text(
+                    progress == null ? 'Start Quran' : 'Continue',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                    textScaler: TextScaler.linear(1),
+                  ),
+                  label: const Icon(Icons.play_arrow, size: 18),
+                ),
+              ],
             ),
-          ],
+          ),
+        );
+      },
+    );
+  }
+
+  void openLastRead(LastReadProgress? progress) {
+    if (progress == null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              const SurahReaderScreen(surahNumber: 1, scrollToAyah: 1),
         ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => progress.readerType == 'juz'
+            ? SurahReaderScreen(
+                juzNumber: progress.readerSectionNumber,
+                scrollToAyah: progress.ayahNumber,
+                scrollToSurah: progress.surahNumber,
+              )
+            : SurahReaderScreen(
+                surahNumber: progress.surahNumber,
+                scrollToAyah: progress.ayahNumber,
+              ),
       ),
     );
   }
@@ -425,11 +878,64 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
   // SURAH LIST
   // ─────────────────────────────────────────────────────────────
   Widget _buildSurahListView(QuranProvider provider) {
+    // 1. Still loading
     if (provider.loadingList) {
       return const Center(
-        child: CircularProgressIndicator(color: AppTheme.primary),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppTheme.primary),
+            SizedBox(height: 12),
+            Text(
+              'Loading Quran...',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ],
+        ),
       );
     }
+
+    // 2. Error happened (this is the key diagnostic you were missing)
+    if (provider.error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: AppTheme.primary,
+                size: 60,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Failed to load surahs',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppTheme.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => provider.bootstrap(),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 3. Genuinely empty
+    if (provider.surahs.isEmpty) {
+      return const Center(
+        child: Text(
+          'No surahs found. Check the download.',
+          style: TextStyle(color: AppTheme.textSecondary),
+        ),
+      );
+    }
+
+    // 4. Normal list
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
       itemCount: provider.surahs.length,
@@ -437,13 +943,13 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
         final surah = provider.surahs[index];
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
-          child: _surahCard(surah),
+          child: surahCard(surah),
         );
       },
     );
   }
 
-  Widget _surahCard(dynamic surah) {
+  Widget surahCard(dynamic surah) {
     return GestureDetector(
       onTap: () => Navigator.push(
         context,
@@ -497,10 +1003,11 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                   Text(
                     surah.englishName,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.primary,
                     ),
+                    textScaler: TextScaler.noScaling,
                   ),
                   // ✅ FIXED: nameTranslation (not englishNameTranslation)
                   Text(
@@ -509,13 +1016,16 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                       fontSize: 13,
                       color: AppTheme.textSecondary,
                     ),
+                    textScaler: TextScaler.noScaling,
                   ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: AppTheme.surfaceContainer,
                           borderRadius: BorderRadius.circular(50),
@@ -526,15 +1036,18 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                             fontSize: 10,
                             color: AppTheme.textSecondary,
                           ),
+                          textScaler: TextScaler.noScaling,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Text(
                         '• ${surah.numberOfAyahs} Ayahs',
                         style: const TextStyle(
-                          fontSize: 11,
+                          fontSize: 10,
                           color: AppTheme.textSecondary,
+                          fontWeight: FontWeight.w600,
                         ),
+                        textScaler: TextScaler.noScaling,
                       ),
                     ],
                   ),
@@ -556,40 +1069,63 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                 ),
                 const SizedBox(height: 4),
                 // Inside _surahCard, replace the play-icon Container with:
-                Consumer<QuranAudioPlayer>(
-                  builder: (context, player, _) {
+                Consumer2<FullSurahPlayer, FullSurahDownloadProvider>(
+                  builder: (context, fullPlayer, dlProvider, _) {
                     final surahNumber = surah.number as int;
-                    final isPlaying = player.isPlayingSurah(surahNumber);
-                    final isPaused = player.isPausedSurah(surahNumber);
-                    final isDownloading = player.isDownloadingSurah(surahNumber);
+                    final isThisSurah = fullPlayer.currentSurah == surahNumber;
+                    final isPlaying = isThisSurah && fullPlayer.isPlaying;
+                    final isPaused =
+                        isThisSurah &&
+                        !fullPlayer.isPlaying &&
+                        fullPlayer.hasSurah;
 
-                    // Icon + progress
+                    final dlProgress = dlProvider.progress[surahNumber];
+                    final isDownloading =
+                        dlProgress?.status == SurahDlStatus.downloading ||
+                        dlProgress?.status == SurahDlStatus.queued;
+
                     Widget iconChild;
                     if (isDownloading) {
                       iconChild = SizedBox(
-                        width: 18, height: 18,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(
-                          value: player.downloadingSurahNumber == surahNumber
-                              ? player.overallProgress
+                          value:
+                              dlProgress?.status == SurahDlStatus.downloading &&
+                                  dlProgress?.progress != null &&
+                                  dlProgress!.progress > 0
+                              ? dlProgress.progress
                               : null,
                           strokeWidth: 2,
-                          valueColor: const AlwaysStoppedAnimation(AppTheme.primary),
+                          valueColor: const AlwaysStoppedAnimation(
+                            AppTheme.primary,
+                          ),
                         ),
                       );
                     } else if (isPlaying) {
-                      iconChild =  Icon(CupertinoIcons.pause,
-                          size: 20, color: AppTheme.primary);
+                      iconChild = const Icon(
+                        CupertinoIcons.pause,
+                        size: 20,
+                        color: AppTheme.primary,
+                      );
                     } else if (isPaused) {
-                      iconChild = const Icon(customIcons.play,
-                          size: 20, color: AppTheme.primary);
+                      iconChild = const Icon(
+                        customIcons.play,
+                        size: 20,
+                        color: AppTheme.primary,
+                      );
                     } else {
-                      iconChild = Icon(customIcons.play,
-                          applyTextScaling: false,
-                          size: 18, color: AppTheme.primary);
+                      iconChild = const Icon(
+                        customIcons.play,
+                        applyTextScaling: false,
+                        size: 18,
+                        color: AppTheme.primary,
+                      );
                     }
 
                     return Container(
-                      width: 34, height: 34,
+                      width: 34,
+                      height: 34,
                       decoration: BoxDecoration(
                         color: isPlaying || isPaused
                             ? AppTheme.gold.withOpacity(0.20)
@@ -598,7 +1134,19 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                       ),
                       child: InkWell(
                         radius: 20,
-                        onTap: () => _onPlaySurahTap(context, surah),
+                        onTap: () {
+                          if (isPlaying) {
+                            fullPlayer.pause();
+                          } else if (isPaused) {
+                            fullPlayer.resume();
+                          } else {
+                            _playSurah(
+                              context,
+                              surahNumber,
+                              surah.englishName ?? '',
+                            );
+                          }
+                        },
                         child: Center(child: iconChild),
                       ),
                     );
@@ -659,7 +1207,8 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                 child: Row(
                   children: [
                     // ✅ Star badge instead of circle
-                    _starBadge(text: '$juzNumber', size: 46),
+
+                    starBadge(text: '$juzNumber', size: 46),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -703,7 +1252,7 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
   // ─────────────────────────────────────────────────────────────
   // STAR BADGE — reusable 8-point star with centered text
   // ─────────────────────────────────────────────────────────────
-  Widget _starBadge({required String text, double size = 44}) {
+  Widget starBadge({required String text, double size = 44}) {
     return SizedBox(
       width: size,
       height: size,
@@ -711,11 +1260,7 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
         alignment: Alignment.center,
         children: [
           // Outer star (light gold fill)
-          Icon(
-            Icons.star,
-            size: size,
-            color: AppTheme.gold.withOpacity(0.35),
-          ),
+          Icon(Icons.star, size: size, color: AppTheme.gold.withOpacity(0.35)),
           // Inner star (primary fill) for layered look
           Icon(
             Icons.star,
@@ -736,27 +1281,24 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
     );
   }
 
-  Future<Reciter?> _showReciterPickerSheet(
-      BuildContext context,
-      dynamic surah,
-      ) async {
-    final player = context.read<QuranAudioPlayer>();
-    final surahNumber = surah.number as int;
-    final totalAyahs = surah.numberOfAyahs as int;
+  Future<FullSurahReciter?> _showFullSurahReciterPicker(
+    BuildContext context, {
+    required int surahNumber,
+    required String surahName,
+  }) async {
+    final dl = context.read<FullSurahDownloadProvider>();
 
-    // Precompute cache status for each reciter
+    // Precompute which reciters already have this surah cached
     final Map<String, bool> cachedMap = {};
-    for (final rec in QuranAudioPlayer.reciters) {
-      cachedMap[rec.id] = await player.isSurahFullyCached(
-        surahNumber: surahNumber,
-        totalAyahs: totalAyahs,
+    for (final rec in fullSurahReciters) {
+      cachedMap[rec.id] = await dl.isSurahDownloaded(
+        surahNumber,
         reciterId: rec.id,
       );
     }
-
     if (!context.mounted) return null;
 
-    return showModalBottomSheet<Reciter>(
+    return showModalBottomSheet<FullSurahReciter>(
       context: context,
       backgroundColor: Colors.white,
       isScrollControlled: true,
@@ -766,28 +1308,31 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
       builder: (sheetCtx) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 0.72,
+          initialChildSize: 0.75,
           minChildSize: 0.4,
-          maxChildSize: 0.92,
+          maxChildSize: 0.95,
           builder: (_, scrollCtrl) {
             return Column(
               children: [
-                // Handle
+                // Drag handle
                 Container(
-                  width: 40, height: 4,
+                  width: 40,
+                  height: 4,
                   margin: const EdgeInsets.only(top: 12, bottom: 8),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
+
+                // Header
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Play ${surah.englishName}',
+                        'Listen to $surahName',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -796,7 +1341,7 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                       ),
                       const SizedBox(height: 4),
                       const Text(
-                        'Select a Qari (Reciter)',
+                        'Choose a Qari (reciter)',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppTheme.textSecondary,
@@ -807,15 +1352,17 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                 ),
                 const SizedBox(height: 12),
                 const Divider(height: 1),
+
+                // Reciter list
                 Expanded(
                   child: ListView.separated(
                     controller: scrollCtrl,
-                    itemCount: QuranAudioPlayer.reciters.length,
+                    itemCount: fullSurahReciters.length,
                     separatorBuilder: (_, __) =>
-                    const Divider(height: 1, indent: 76),
+                        const Divider(height: 1, indent: 76),
                     itemBuilder: (context, i) {
-                      final rec = QuranAudioPlayer.reciters[i];
-                      final isSelected = player.selectedReciter.id == rec.id;
+                      final rec = fullSurahReciters[i];
+                      final isCurrent = dl.selectedReciterId == rec.id;
                       final isCached = cachedMap[rec.id] ?? false;
 
                       return ListTile(
@@ -826,20 +1373,52 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                             height: 46,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => Container(
-                              width: 46, height: 46,
+                              width: 46,
+                              height: 46,
                               color: AppTheme.surfaceContainer,
-                              child: const Icon(Icons.person,
-                                  color: AppTheme.primary),
+                              child: const Icon(
+                                Icons.person,
+                                color: AppTheme.primary,
+                              ),
                             ),
                           ),
                         ),
-                        title: Text(
-                          rec.name,
-                          style: TextStyle(
-                            fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.w500,
-                            color: AppTheme.primary,
-                          ),
+                        title: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                rec.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontWeight: isCurrent
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            ),
+                            if (isCurrent) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.gold.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'CURRENT',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                         subtitle: Text(
                           rec.arabicName,
@@ -850,35 +1429,40 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                         ),
                         trailing: isCached
                             ? Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.check_circle,
-                                  size: 14, color: AppTheme.primary),
-                              SizedBox(width: 4),
-                              Text(
-                                'Downloaded ',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.w600,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
                                 ),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(
+                                      Icons.check_circle,
+                                      size: 14,
+                                      color: AppTheme.primary,
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      'Offline',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppTheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : const Icon(
+                                Icons.cloud_download_outlined,
+                                size: 20,
+                                color: AppTheme.gold,
                               ),
-                            ],
-                          ),
-                        )
-                            : const Icon(Icons.download_rounded,
-                            size: 20, color: AppTheme.gold),
-                        onTap: () {
-                          player.setReciter(rec);
-                          Navigator.pop(sheetCtx, rec);
-                        },
+                        onTap: () => Navigator.pop(sheetCtx, rec),
                       );
                     },
                   ),
@@ -897,11 +1481,17 @@ class _DownloadProgressOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<QuranAudioPlayer>(
-      builder: (context, player, _) {
-        if (player.downloadState != SurahDownloadState.downloading) {
-          return const SizedBox.shrink();
-        }
+    return Consumer<FullSurahDownloadProvider>(
+      builder: (context, dl, _) {
+        final active = dl.progress.values
+            .where((p) => p.status == SurahDlStatus.downloading)
+            .toList();
+        if (active.isEmpty) return const SizedBox.shrink();
+
+        // Show the first in-flight download
+        final p = active.first;
+        final recName = dl.selectedReciter.name;
+
         return Positioned(
           left: 16,
           right: 16,
@@ -918,7 +1508,8 @@ class _DownloadProgressOverlay extends StatelessWidget {
                   Row(
                     children: [
                       const SizedBox(
-                        width: 18, height: 18,
+                        width: 18,
+                        height: 18,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation(AppTheme.gold),
@@ -927,8 +1518,7 @@ class _DownloadProgressOverlay extends StatelessWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Downloading Surah ${player.downloadingSurahNumber}… '
-                              '${player.downloadedCount}/${player.totalAyahsToDownload}',
+                          'Downloading Surah ${p.surahNumber} • $recName',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
@@ -937,18 +1527,12 @@ class _DownloadProgressOverlay extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${(player.overallProgress * 100).toStringAsFixed(0)}%',
+                        '${(p.progress * 100).toStringAsFixed(0)}%',
                         style: const TextStyle(
                           color: AppTheme.gold,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: () => player.cancelDownload(),
-                        child: const Icon(Icons.close,
-                            color: Colors.white70, size: 18),
                       ),
                     ],
                   ),
@@ -956,11 +1540,10 @@ class _DownloadProgressOverlay extends StatelessWidget {
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
-                      value: player.overallProgress,
+                      value: p.progress,
                       minHeight: 4,
                       backgroundColor: Colors.white24,
-                      valueColor:
-                      const AlwaysStoppedAnimation(AppTheme.gold),
+                      valueColor: const AlwaysStoppedAnimation(AppTheme.gold),
                     ),
                   ),
                 ],

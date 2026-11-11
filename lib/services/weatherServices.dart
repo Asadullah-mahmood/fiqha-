@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:quranpak/models/WeatherDetailData.dart';
 import 'package:quranpak/models/weatherData.dart';
 
 class WeatherService {
@@ -64,11 +65,57 @@ class WeatherService {
 
   // Helper to map codes to icon names (you can use this with weather_icons_animated or similar)
   String _getIconName(int code) {
-    if (code == 0) return "sunny";
-    if (code <= 3) return "partly_cloudy";
-    if (code >= 51 && code <= 67) return "rainy";
-    if (code >= 71 && code <= 77) return "snowy";
-    if (code >= 95) return "thunderstorm";
-    return "cloudy";
+  if (code == 0) return 'Clear Sky';
+  if (code <= 3) return 'Partly Cloudy';
+  if (code <= 48) return 'Foggy';
+  if (code <= 57) return 'Drizzle';
+  if (code <= 67) return 'Rain';
+  if (code <= 77) return 'Snow';
+  if (code <= 82) return 'Rain Showers';
+  if (code <= 86) return 'Snow Showers';
+  return 'Thunderstorm';
+  }
+}
+
+
+class WeatherApiService {
+  static const String _baseUrl = 'https://api.open-meteo.com/v1/forecast';
+
+  Future<WeatherDetailData?> getDetailedWeather({
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final url = Uri.parse(
+        '$_baseUrl?'
+        'latitude=$latitude&'
+        'longitude=$longitude&'
+        'current=temperature_2m,relative_humidity_2m,apparent_temperature,'
+        'precipitation,weather_code,wind_speed_10m,wind_direction_10m,'
+        'pressure_msl,uv_index&'
+        'daily=temperature_2m_max,temperature_2m_min,precipitation_sum,'
+        'weather_code,wind_speed_10m_max,uv_index_max,sunrise,sunset&'
+        'hourly=temperature_2m,precipitation_probability,weather_code&'
+        'forecast_days=16&'
+        'timezone=auto&'
+        'wind_speed_unit=kmh',
+      );
+
+      final response = await http.get(url);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // Check for API error
+        if (data['error'] == true) {
+          print('Open-Meteo error: ${data['reason']}');
+          return null;
+        }
+        return WeatherDetailData.fromJson(data);
+      }
+      return null;
+    } catch (e) {
+      print('Weather API error: $e');
+      return null;
+    }
   }
 }

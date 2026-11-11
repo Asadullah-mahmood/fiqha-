@@ -5,7 +5,13 @@ class customIcons {
 
   static const String fontFamily = "fiqha_icons";
 
+
+
   static const IconData save = IconData(0xf00c, fontFamily: fontFamily);
+  static const IconData settings = IconData(0xf00e, fontFamily: fontFamily);
+  static const IconData kaaba = IconData(0xf00d, fontFamily: fontFamily);  
+  static const IconData delete = IconData(0xf010, fontFamily: fontFamily);  
+  static const IconData book = IconData(0xf00f, fontFamily: fontFamily);  
   static const IconData share = IconData(0xf00b, fontFamily: fontFamily);
   static const IconData sound = IconData(0xf00a, fontFamily: fontFamily);
   static const IconData play = IconData(0xf009, fontFamily: fontFamily);

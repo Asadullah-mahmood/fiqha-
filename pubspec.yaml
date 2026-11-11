@@ -14,7 +14,7 @@ dependencies:
   cupertino_icons:
 
     # Quran API
-  http:
+  http: ^1.6.0
 
     # Voice search
 #  speech_to_text:
@@ -48,6 +48,7 @@ dependencies:
   toastification: ^3.2.0
   cloud_firestore: ^6.10.0
   hijri_date: ^1.1.0
+  hijri: ^3.0.1
   permission_handler: ^13.0.2
   geolocator: ^12.0.0
   adhan_dart: ^2.0.1
@@ -57,10 +58,26 @@ dependencies:
   precise_compass: ^0.2.0
   qibla: ^1.0.1
   audio_session: ^0.2.4
-  path_provider:
+  path_provider: ^2.1.6
   dio: ^5.11.1
-  sqflite: ^2.4.4
-  path:
+  sqflite: ^2.4.4+2
+  path: ^1.9.1
+  sqlite3_flutter_libs:
+  sqflite_common_ffi:
+  share_plus:
+  flutter_local_notifications: any
+  android_alarm_manager_plus: ^5.1.2
+  flutter_timezone: any
+  fl_chart: ^0.66.0
+  flutter_animate: ^4.5.0
+  dorar_hadith: ^0.7.0
+  dorar_hadith_flutter: ^0.7.0
+  archive: ^4.5.2
+  crypto: ^3.0.7
+  scrollable_positioned_list:
+  flutter_map:
+  latlong2:
+  svg_flutter:
 
 dev_dependencies:
   flutter_test:
@@ -77,9 +94,17 @@ flutter:
   assets:
     - assets/image/
     - assets/animations/
+    - assets/audio/
+    - assets/db/
+    
 
 
   fonts:
     - family: fiqha_icons
       fonts:
         - asset: assets/fiqhaIcons.ttf
+        
+
+    - family: indo_pak
+      fonts:
+        - asset: assets/font/indo-pak.ttf

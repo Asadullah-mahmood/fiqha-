@@ -62,7 +62,7 @@ class QuranService {
         final ayahs = arabicAyahs.asMap().entries.map((entry) {
           final i = entry.key;
           final ayahJson = entry.value as Map<String, dynamic>;
-          ayahJson['surah'] = {'number': surahNumber, 'name': surah.nameArabic, 'englishName': surah.englishName};
+          ayahJson['surah'] = {'number': surahNumber, 'name': surah.name, 'englishName': surah.englishName};
           return Ayah.fromJson(
             ayahJson,
             urdu: urduAyahs != null && i < urduAyahs.length ? urduAyahs[i]['text'] : null,

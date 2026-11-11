@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:quranpak/utils/AppTheme.dart';
-import 'package:quranpak/utils/QuranAudioPlayer.dart';
-import 'package:quranpak/services/AudioServices.dart';
+import 'package:quranpak/widgets/customIcons.dart';
+import 'package:toastification/toastification.dart';
+
+import '../models/FullSurahReciter.dart';
+import '../services/FullSurahDownloadProvider.dart';
+import '../utils/AppTheme.dart';
+import '../utils/FullSurahPlayer.dart';
+import '../widgets/FullSurahMiniPlayer.dart';
 
 class AudioDownloadsScreen extends StatefulWidget {
   const AudioDownloadsScreen({super.key});
@@ -13,79 +18,153 @@ class AudioDownloadsScreen extends StatefulWidget {
 }
 
 class _AudioDownloadsScreenState extends State<AudioDownloadsScreen> {
-  final AudioDownloadService _downloader = AudioDownloadService();
-
   bool _loading = true;
-  List<_ReciterGroup> _groups = [];
+  List<_ReciterDownloads> _groups = [];
+
+  // ── Surah number → metadata (name + Arabic) ──
+  static const Map<int, _SurahMeta> _surahMeta = {
+    1: _SurahMeta('Al-Fatihah', 'الفاتحة', 7),
+    2: _SurahMeta('Al-Baqarah', 'البقرة', 286),
+    3: _SurahMeta("Ali 'Imran", 'آل عمران', 200),
+    4: _SurahMeta('An-Nisa', 'النساء', 176),
+    5: _SurahMeta("Al-Ma'idah", 'المائدة', 120),
+    6: _SurahMeta("Al-An'am", 'الأنعام', 165),
+    7: _SurahMeta("Al-A'raf", 'الأعراف', 206),
+    8: _SurahMeta('Al-Anfal', 'الأنفال', 75),
+    9: _SurahMeta('At-Tawbah', 'التوبة', 129),
+    10: _SurahMeta('Yunus', 'يونس', 109),
+    11: _SurahMeta('Hud', 'هود', 123),
+    12: _SurahMeta('Yusuf', 'يوسف', 111),
+    13: _SurahMeta("Ar-Ra'd", 'الرعد', 43),
+    14: _SurahMeta('Ibrahim', 'إبراهيم', 52),
+    15: _SurahMeta('Al-Hijr', 'الحجر', 99),
+    16: _SurahMeta('An-Nahl', 'النحل', 128),
+    17: _SurahMeta('Al-Isra', 'الإسراء', 111),
+    18: _SurahMeta('Al-Kahf', 'الكهف', 110),
+    19: _SurahMeta('Maryam', 'مريم', 98),
+    20: _SurahMeta('Ta-Ha', 'طه', 135),
+    21: _SurahMeta('Al-Anbiya', 'الأنبياء', 112),
+    22: _SurahMeta('Al-Hajj', 'الحج', 78),
+    23: _SurahMeta("Al-Mu'minun", 'المؤمنون', 118),
+    24: _SurahMeta('An-Nur', 'النور', 64),
+    25: _SurahMeta('Al-Furqan', 'الفرقان', 77),
+    26: _SurahMeta("Ash-Shu'ara", 'الشعراء', 227),
+    27: _SurahMeta('An-Naml', 'النمل', 93),
+    28: _SurahMeta('Al-Qasas', 'القصص', 88),
+    29: _SurahMeta("Al-'Ankabut", 'العنكبوت', 69),
+    30: _SurahMeta('Ar-Rum', 'الروم', 60),
+    31: _SurahMeta('Luqman', 'لقمان', 34),
+    32: _SurahMeta('As-Sajdah', 'السجدة', 30),
+    33: _SurahMeta('Al-Ahzab', 'الأحزاب', 73),
+    34: _SurahMeta('Saba', 'سبأ', 54),
+    35: _SurahMeta('Fatir', 'فاطر', 45),
+    36: _SurahMeta('Ya-Sin', 'يس', 83),
+    37: _SurahMeta('As-Saffat', 'الصافات', 182),
+    38: _SurahMeta('Sad', 'ص', 88),
+    39: _SurahMeta('Az-Zumar', 'الزمر', 75),
+    40: _SurahMeta('Ghafir', 'غافر', 85),
+    41: _SurahMeta('Fussilat', 'فصلت', 54),
+    42: _SurahMeta('Ash-Shura', 'الشورى', 53),
+    43: _SurahMeta('Az-Zukhruf', 'الزخرف', 89),
+    44: _SurahMeta('Ad-Dukhan', 'الدخان', 59),
+    45: _SurahMeta('Al-Jathiyah', 'الجاثية', 37),
+    46: _SurahMeta('Al-Ahqaf', 'الأحقاف', 35),
+    47: _SurahMeta('Muhammad', 'محمد', 38),
+    48: _SurahMeta('Al-Fath', 'الفتح', 29),
+    49: _SurahMeta('Al-Hujurat', 'الحجرات', 18),
+    50: _SurahMeta('Qaf', 'ق', 45),
+    51: _SurahMeta('Adh-Dhariyat', 'الذاريات', 60),
+    52: _SurahMeta('At-Tur', 'الطور', 49),
+    53: _SurahMeta('An-Najm', 'النجم', 62),
+    54: _SurahMeta('Al-Qamar', 'القمر', 55),
+    55: _SurahMeta('Ar-Rahman', 'الرحمن', 78),
+    56: _SurahMeta("Al-Waqi'ah", 'الواقعة', 96),
+    57: _SurahMeta('Al-Hadid', 'الحديد', 29),
+    58: _SurahMeta('Al-Mujadila', 'المجادلة', 22),
+    59: _SurahMeta('Al-Hashr', 'الحشر', 24),
+    60: _SurahMeta('Al-Mumtahanah', 'الممتحنة', 13),
+    61: _SurahMeta('As-Saff', 'الصف', 14),
+    62: _SurahMeta("Al-Jumu'ah", 'الجمعة', 11),
+    63: _SurahMeta('Al-Munafiqun', 'المنافقون', 11),
+    64: _SurahMeta('At-Taghabun', 'التغابن', 18),
+    65: _SurahMeta('At-Talaq', 'الطلاق', 12),
+    66: _SurahMeta('At-Tahrim', 'التحريم', 12),
+    67: _SurahMeta('Al-Mulk', 'الملك', 30),
+    68: _SurahMeta('Al-Qalam', 'القلم', 52),
+    69: _SurahMeta('Al-Haqqah', 'الحاقة', 52),
+    70: _SurahMeta("Al-Ma'arij", 'المعارج', 44),
+    71: _SurahMeta('Nuh', 'نوح', 28),
+    72: _SurahMeta('Al-Jinn', 'الجن', 28),
+    73: _SurahMeta('Al-Muzzammil', 'المزمل', 20),
+    74: _SurahMeta('Al-Muddaththir', 'المدثر', 56),
+    75: _SurahMeta('Al-Qiyamah', 'القيامة', 40),
+    76: _SurahMeta('Al-Insan', 'الإنسان', 31),
+    77: _SurahMeta('Al-Mursalat', 'المرسلات', 50),
+    78: _SurahMeta('An-Naba', 'النبأ', 40),
+    79: _SurahMeta("An-Nazi'at", 'النازعات', 46),
+    80: _SurahMeta("'Abasa", 'عبس', 42),
+    81: _SurahMeta('At-Takwir', 'التكوير', 29),
+    82: _SurahMeta('Al-Infitar', 'الانفطار', 19),
+    83: _SurahMeta('Al-Mutaffifin', 'المطففين', 36),
+    84: _SurahMeta('Al-Inshiqaq', 'الانشقاق', 25),
+    85: _SurahMeta('Al-Buruj', 'البروج', 22),
+    86: _SurahMeta('At-Tariq', 'الطارق', 17),
+    87: _SurahMeta("Al-A'la", 'الأعلى', 19),
+    88: _SurahMeta('Al-Ghashiyah', 'الغاشية', 26),
+    89: _SurahMeta('Al-Fajr', 'الفجر', 30),
+    90: _SurahMeta('Al-Balad', 'البلد', 20),
+    91: _SurahMeta('Ash-Shams', 'الشمس', 15),
+    92: _SurahMeta('Al-Lail', 'الليل', 21),
+    93: _SurahMeta('Ad-Duha', 'الضحى', 11),
+    94: _SurahMeta('Ash-Sharh', 'الشرح', 8),
+    95: _SurahMeta('At-Tin', 'التين', 8),
+    96: _SurahMeta("Al-'Alaq", 'العلق', 19),
+    97: _SurahMeta('Al-Qadr', 'القدر', 5),
+    98: _SurahMeta('Al-Bayyinah', 'البينة', 8),
+    99: _SurahMeta('Az-Zalzalah', 'الزلزلة', 8),
+    100: _SurahMeta("Al-'Adiyat", 'العاديات', 11),
+    101: _SurahMeta("Al-Qari'ah", 'القارعة', 11),
+    102: _SurahMeta('At-Takathur', 'التكاثر', 8),
+    103: _SurahMeta("Al-'Asr", 'العصر', 3),
+    104: _SurahMeta('Al-Humazah', 'الهمزة', 9),
+    105: _SurahMeta('Al-Fil', 'الفيل', 5),
+    106: _SurahMeta('Quraish', 'قريش', 4),
+    107: _SurahMeta("Al-Ma'un", 'الماعون', 7),
+    108: _SurahMeta('Al-Kauthar', 'الكوثر', 3),
+    109: _SurahMeta('Al-Kafirun', 'الكافرون', 6),
+    110: _SurahMeta('An-Nasr', 'النصر', 3),
+    111: _SurahMeta('Al-Masad', 'المسد', 5),
+    112: _SurahMeta('Al-Ikhlas', 'الإخلاص', 4),
+    113: _SurahMeta('Al-Falaq', 'الفلق', 5),
+    114: _SurahMeta('An-Nas', 'الناس', 6),
+  };
 
   @override
   void initState() {
     super.initState();
-    _scanDownloads();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scanDownloads());
   }
 
-
-  // Surah number → English name. Same list your QuranProvider uses.
-  static const Map<int, String> _surahNames = {
-    1: 'Al-Fatihah', 2: 'Al-Baqarah', 3: 'Ali \'Imran', 4: 'An-Nisa',
-    5: 'Al-Ma\'idah', 6: 'Al-An\'am', 7: 'Al-A\'raf', 8: 'Al-Anfal',
-    9: 'At-Tawbah', 10: 'Yunus', 11: 'Hud', 12: 'Yusuf',
-    13: 'Ar-Ra\'d', 14: 'Ibrahim', 15: 'Al-Hijr', 16: 'An-Nahl',
-    17: 'Al-Isra', 18: 'Al-Kahf', 19: 'Maryam', 20: 'Ta-Ha',
-    21: 'Al-Anbiya', 22: 'Al-Hajj', 23: 'Al-Mu\'minun', 24: 'An-Nur',
-    25: 'Al-Furqan', 26: 'Ash-Shu\'ara', 27: 'An-Naml', 28: 'Al-Qasas',
-    29: 'Al-\'Ankabut', 30: 'Ar-Rum', 31: 'Luqman', 32: 'As-Sajdah',
-    33: 'Al-Ahzab', 34: 'Saba', 35: 'Fatir', 36: 'Ya-Sin',
-    37: 'As-Saffat', 38: 'Sad', 39: 'Az-Zumar', 40: 'Ghafir',
-    41: 'Fussilat', 42: 'Ash-Shura', 43: 'Az-Zukhruf', 44: 'Ad-Dukhan',
-    45: 'Al-Jathiyah', 46: 'Al-Ahqaf', 47: 'Muhammad', 48: 'Al-Fath',
-    49: 'Al-Hujurat', 50: 'Qaf', 51: 'Adh-Dhariyat', 52: 'At-Tur',
-    53: 'An-Najm', 54: 'Al-Qamar', 55: 'Ar-Rahman', 56: 'Al-Waqi\'ah',
-    57: 'Al-Hadid', 58: 'Al-Mujadila', 59: 'Al-Hashr', 60: 'Al-Mumtahanah',
-    61: 'As-Saff', 62: 'Al-Jumu\'ah', 63: 'Al-Munafiqun', 64: 'At-Taghabun',
-    65: 'At-Talaq', 66: 'At-Tahrim', 67: 'Al-Mulk', 68: 'Al-Qalam',
-    69: 'Al-Haqqah', 70: 'Al-Ma\'arij', 71: 'Nuh', 72: 'Al-Jinn',
-    73: 'Al-Muzzammil', 74: 'Al-Muddaththir', 75: 'Al-Qiyamah', 76: 'Al-Insan',
-    77: 'Al-Mursalat', 78: 'An-Naba', 79: 'An-Nazi\'at', 80: '\'Abasa',
-    81: 'At-Takwir', 82: 'Al-Infitar', 83: 'Al-Mutaffifin', 84: 'Al-Inshiqaq',
-    85: 'Al-Buruj', 86: 'At-Tariq', 87: 'Al-A\'la', 88: 'Al-Ghashiyah',
-    89: 'Al-Fajr', 90: 'Al-Balad', 91: 'Ash-Shams', 92: 'Al-Lail',
-    93: 'Ad-Duha', 94: 'Ash-Sharh', 95: 'At-Tin', 96: 'Al-\'Alaq',
-    97: 'Al-Qadr', 98: 'Al-Bayyinah', 99: 'Az-Zalzalah', 100: 'Al-\'Adiyat',
-    101: 'Al-Qari\'ah', 102: 'At-Takathur', 103: 'Al-\'Asr', 104: 'Al-Humazah',
-    105: 'Al-Fil', 106: 'Quraish', 107: 'Al-Ma\'un', 108: 'Al-Kauthar',
-    109: 'Al-Kafirun', 110: 'An-Nasr', 111: 'Al-Masad', 112: 'Al-Ikhlas',
-    113: 'Al-Falaq', 114: 'An-Nas',
-  };
-
-  String _surahLabel(int num) {
-    final name = _surahNames[num];
-    return name != null ? '$num. $name' : 'Surah $num';
-  }
-
+  // ═════════════════════════════════════════════════════════════
+  // SCAN — read the on-disk full-surah cache via the provider
+  // ═════════════════════════════════════════════════════════════
   Future<void> _scanDownloads() async {
     setState(() => _loading = true);
-    final reciterIds = await _downloader.listRecitersWithDownloads();
+    final dl = context.read<FullSurahDownloadProvider>();
 
-    final groups = <_ReciterGroup>[];
-    for (final id in reciterIds) {
-      final rec = QuranAudioPlayer.reciters.firstWhere(
-            (r) => r.id == id,
-        orElse: () => Reciter(
-          id: id,
-          name: id,
-          arabicName: '',
-          baseUrl: '',
-          imageAsset: '',
+    final groups = <_ReciterDownloads>[];
+    for (final reciter in fullSurahReciters) {
+      final surahs = await dl.listDownloaded(reciterId: reciter.id);
+      if (surahs.isEmpty) continue;
+
+      final sizeBytes = await dl.cacheSizeBytes(reciter.id);
+      groups.add(
+        _ReciterDownloads(
+          reciter: reciter,
+          surahs: surahs,
+          sizeBytes: sizeBytes,
         ),
       );
-      final surahs = await _downloader.listDownloadedSurahs(id);
-      final sizeBytes = await _downloader.getReciterSizeBytes(id);
-      groups.add(_ReciterGroup(
-        reciter: rec,
-        surahs: surahs,
-        sizeBytes: sizeBytes,
-      ));
     }
 
     if (!mounted) return;
@@ -117,13 +196,13 @@ class _AudioDownloadsScreenState extends State<AudioDownloadsScreen> {
       ),
       body: _loading
           ? const Center(
-        child: CircularProgressIndicator(color: AppTheme.primary),
-      )
+              child: CircularProgressIndicator(color: AppTheme.primary),
+            )
           : _groups.isEmpty
           ? _buildEmptyState()
           : _buildGroupsList(),
-      // ✅ Mini-player wired into bottomNavigationBar so it never overlaps content
-      bottomNavigationBar: const _AudioMiniPlayer(),
+      // ✅ Full-surah mini player (this replaces the old per-ayah one)
+      //  bottomNavigationBar: const FullSurahMiniPlayer(),
     );
   }
 
@@ -162,7 +241,7 @@ class _AudioDownloadsScreenState extends State<AudioDownloadsScreen> {
             const SizedBox(height: 8),
             const Text(
               'Open the Quran screen, tap the play icon on a surah, '
-                  'and choose a Qari to download it here.',
+              'and choose a Qari to download it here.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
@@ -177,215 +256,119 @@ class _AudioDownloadsScreenState extends State<AudioDownloadsScreen> {
   }
 
   // ═════════════════════════════════════════════════════════════
-  // LIST OF RECITERS
+  // LIST OF RECITERS — tap a card to open that reciter's surahs
   // ═════════════════════════════════════════════════════════════
   Widget _buildGroupsList() {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       itemCount: _groups.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 16),
-      itemBuilder: (context, i) => _reciterSection(_groups[i]),
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, i) => _reciterCard(_groups[i]),
     );
   }
 
-  Widget _reciterSection(_ReciterGroup group) {
-    final player = context.watch<QuranAudioPlayer>();
-    final isCurrent = player.selectedReciter.id == group.reciter.id;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isCurrent
-              ? AppTheme.gold.withOpacity(0.6)
-              : Colors.transparent,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppTheme.primary.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Reciter header ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-            child: Row(
-              children: [
-                ClipOval(
-                  child: _reciterAvatar(group.reciter, size: 48),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              group.reciter.name,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (isCurrent) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppTheme.gold.withOpacity(0.20),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Text(
-                                'Now',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.gold,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (group.reciter.arabicName.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          group.reciter.arabicName,
-                          style: GoogleFonts.notoSansArabic(
-                            fontSize: 12,
-                            color: AppTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 4),
-                      Text(
-                        '${group.surahs.length} surah'
-                            '${group.surahs.length == 1 ? "" : "s"} · '
-                            '${_formatBytes(group.sizeBytes)}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Delete all downloads for this Qari',
-                  icon: const Icon(Icons.delete_outline,
-                      size: 20, color: AppTheme.textSecondary),
-                  onPressed: () => _confirmDelete(group),
-                ),
-              ],
-            ),
-          ),
-
-          const Divider(height: 1),
-
-          // ── Surah rows ──
-          ...group.surahs.map((num) => _surahRow(group, num)),
-        ],
-      ),
-    );
-  }
-
-  // ═════════════════════════════════════════════════════════════
-  // ONE SURAH ROW — with play/pause button
-  // ═════════════════════════════════════════════════════════════
-  Widget _surahRow(_ReciterGroup group, int surahNumber) {
-    final player = context.watch<QuranAudioPlayer>();
-
-    final isThisSurah =
-        player.currentSurah == surahNumber &&
-            player.selectedReciter.id == group.reciter.id;
-    final isPlaying = isThisSurah && player.isPlaying;
-    final isPaused = isThisSurah && !player.isPlaying;
-
+  Widget _reciterCard(_ReciterDownloads group) {
     return Material(
-      color: Colors.transparent,
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => _togglePlayPause(group, surahNumber),
+        onTap: () => _openReciterSurahs(group),
         child: Padding(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.all(14),
           child: Row(
             children: [
-              // Surah number badge (star)
-              SizedBox(
-                width: 38,
-                height: 38,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Icon(
-                      Icons.star,
-                      size: 38,
-                      color: AppTheme.gold.withOpacity(0.35),
+              // ── Avatar (imageAsset from the reciter) ──
+              ClipOval(
+                child: Image.network(
+                  group.reciter.imageAsset,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 56,
+                    height: 56,
+                    color: AppTheme.primary.withOpacity(0.10),
+                    child: const Icon(
+                      Icons.person,
+                      color: AppTheme.primary,
+                      size: 30,
                     ),
-                    Text(
-                      '${_surahLabel(surahNumber)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
-              // Title / subtitle
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Surah $surahNumber',
+                      group.reciter.name,
                       style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
                         color: AppTheme.primary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      isPlaying
-                          ? 'Playing · Ayah ${player.currentAyah ?? 1}'
-                          : isPaused
-                          ? 'Paused · Ayah ${player.currentAyah ?? 1}'
-                          : 'Downloaded · ready to play',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isThisSurah
-                            ? AppTheme.gold
-                            : AppTheme.textSecondary,
-                        fontWeight: isThisSurah
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                      group.reciter.arabicName,
+                      style: GoogleFonts.notoSansArabic(
+                        fontSize: 13,
+                        color: AppTheme.textSecondary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.gold.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${group.surahs.length} / 114 surahs',
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primary,
+                            ),
+                            textScaler: TextScaler.linear(1),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '· ${_formatBytes(group.sizeBytes)}',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.textSecondary,
+                          ),
+                          textScaler: TextScaler.linear(1),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              // ✅ Play / Pause button — large and clear
-              _playPauseButton(
-                isPlaying: isPlaying,
-                isActive: isThisSurah,
-                onTap: () => _togglePlayPause(group, surahNumber),
+              // Delete reciter downloads
+              IconButton(
+                tooltip: 'Delete all downloads for this Qari',
+                icon: Icon(
+                  customIcons.delete,
+                  size: 20,
+                  color: AppTheme.textSecondary,
+                ),
+                onPressed: () => _confirmDelete(group),
               ),
+              const Icon(Icons.chevron_right, color: AppTheme.gold, size: 22),
             ],
           ),
         ),
@@ -393,136 +376,69 @@ class _AudioDownloadsScreenState extends State<AudioDownloadsScreen> {
     );
   }
 
-  Widget _playPauseButton({
-    required bool isPlaying,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: isActive ? AppTheme.primary : AppTheme.surfaceContainer,
-      shape: const CircleBorder(),
-      child: InkWell(
-        onTap: onTap,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 42,
-          height: 42,
-          child: Icon(
-            isPlaying
-                ? Icons.pause_rounded
-                : Icons.play_arrow_rounded,
-            color: isActive ? AppTheme.gold : AppTheme.primary,
-            size: 26,
-          ),
+  // ═════════════════════════════════════════════════════════════
+  // OPEN RECITER → new screen with all surahs + search
+  // ═════════════════════════════════════════════════════════════
+  void _openReciterSurahs(_ReciterDownloads group) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReciterDownloadsDetailScreen(
+          reciter: group.reciter,
+          surahNumbers: group.surahs,
         ),
       ),
-    );
+    ).then((_) => _scanDownloads());
   }
 
   // ═════════════════════════════════════════════════════════════
-  // PLAY / PAUSE LOGIC
+  // DELETE ALL FOR A RECITER
   // ═════════════════════════════════════════════════════════════
-  Future<void> _togglePlayPause(_ReciterGroup group, int surahNumber) async {
-    final player = context.read<QuranAudioPlayer>();
-
-    final isThisSurah =
-        player.currentSurah == surahNumber &&
-            player.selectedReciter.id == group.reciter.id;
-
-    if (isThisSurah) {
-      // Same surah → toggle pause/resume
-      if (player.isPlaying) {
-        await player.pause();
-      } else {
-        await player.resume();
-      }
-      return;
-    }
-
-    // Different surah → start fresh
-    final totalAyahs = await AudioDownloadService()
-        .countAyahs(group.reciter.id, surahNumber);
-    if (!mounted) return;
-
-    await player.playDownloadedSurah(
-      surahNumber: surahNumber,
-      totalAyahs: totalAyahs,
-      surahName: _surahLabel(surahNumber),
-      reciterId: group.reciter.id,
-    );
-  }
-
-  // ═════════════════════════════════════════════════════════════
-  // HELPERS
-  // ═════════════════════════════════════════════════════════════
-  Widget _reciterAvatar(Reciter reciter, {double size = 48}) {
-    if (reciter.imageAsset.isEmpty) {
-      return Container(
-        width: size,
-        height: size,
-        color: AppTheme.primary.withOpacity(0.10),
-        child: const Icon(Icons.person, color: AppTheme.primary),
-      );
-    }
-    if (reciter.imageAsset.startsWith('http')) {
-      return Image.network(
-        reciter.imageAsset,
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
-          width: size,
-          height: size,
-          color: AppTheme.primary.withOpacity(0.10),
-          child: const Icon(Icons.person, color: AppTheme.primary),
-        ),
-      );
-    }
-    return Image.asset(
-      reciter.imageAsset,
-      width: size,
-      height: size,
-      fit: BoxFit.cover,
-      errorBuilder: (_, __, ___) => Container(
-        width: size,
-        height: size,
-        color: AppTheme.primary.withOpacity(0.10),
-        child: const Icon(Icons.person, color: AppTheme.primary),
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(_ReciterGroup group) async {
+  Future<void> _confirmDelete(_ReciterDownloads group) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Delete downloads?'),
         content: Text(
           'This will remove all ${group.surahs.length} surah(s) '
-              'from ${group.reciter.name} (${_formatBytes(group.sizeBytes)}).',
+          'from ${group.reciter.name} (${_formatBytes(group.sizeBytes)}).',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel',
-                style: TextStyle(color: AppTheme.textSecondary)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child:
-            const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
 
-    if (ok != true) return;
-    await AudioDownloadService().deleteReciter(group.reciter.id);
-    await _scanDownloads();
+    if (ok != true || !mounted) return;
+    final dl = context.read<FullSurahDownloadProvider>();
+    final player = context.read<FullSurahPlayer>();
+    try {
+      if (player.currentReciterId == group.reciter.id) {
+        await player.stop();
+      }
+      await dl.deleteReciter(group.reciter.id);
+      await _scanDownloads();
+    } catch (error, stackTrace) {
+      debugPrint('Could not delete downloads for ${group.reciter.id}: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete reciter downloads: $error')),
+        );
+      }
+    }
   }
 
   String _formatBytes(int bytes) {
@@ -537,197 +453,358 @@ class _AudioDownloadsScreenState extends State<AudioDownloadsScreen> {
   }
 }
 
-class _ReciterGroup {
-  final Reciter reciter;
+// ── Model ──
+class _ReciterDownloads {
+  final FullSurahReciter reciter;
   final List<int> surahs;
   final int sizeBytes;
 
-  _ReciterGroup({
+  _ReciterDownloads({
     required this.reciter,
     required this.surahs,
     required this.sizeBytes,
   });
 }
 
+class _SurahMeta {
+  final String english;
+  final String arabic;
+  final int ayahCount;
+  const _SurahMeta(this.english, this.arabic, this.ayahCount);
+}
+
 // ═════════════════════════════════════════════════════════════════
-// MINI PLAYER — sits at bottomNavigationBar, always visible when playing
+// RECITER DETAIL SCREEN — search + numbered surah list + instant play
 // ═════════════════════════════════════════════════════════════════
-class _AudioMiniPlayer extends StatelessWidget {
-  const _AudioMiniPlayer();
+class ReciterDownloadsDetailScreen extends StatefulWidget {
+  final FullSurahReciter reciter;
+  final List<int> surahNumbers;
+
+  const ReciterDownloadsDetailScreen({
+    super.key,
+    required this.reciter,
+    required this.surahNumbers,
+  });
+
+  @override
+  State<ReciterDownloadsDetailScreen> createState() =>
+      _ReciterDownloadsDetailScreenState();
+}
+
+class _ReciterDownloadsDetailScreenState
+    extends State<ReciterDownloadsDetailScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  late List<int> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = List.of(widget.surahNumbers)..sort();
+    _searchController.addListener(_onSearch);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearch);
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearch() {
+    final q = _searchController.text.trim().toLowerCase();
+    setState(() {
+      if (q.isEmpty) {
+        _filtered = List.of(widget.surahNumbers)..sort();
+        return;
+      }
+
+      // Match by number OR by name
+      final numberMatch = int.tryParse(q);
+      _filtered = widget.surahNumbers.where((n) {
+        final meta = _AudioDownloadsScreenState._surahMeta[n];
+        if (meta == null) return false;
+        if (numberMatch != null && n == numberMatch) return true;
+        return meta.english.toLowerCase().contains(q) ||
+            meta.arabic.contains(q) ||
+            'surah $n'.contains(q) ||
+            '$n'.contains(q);
+      }).toList()..sort();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<QuranAudioPlayer>(
-      builder: (context, player, _) {
-        // Hide when nothing is loaded
-        if (player.currentSurah == null) return const SizedBox.shrink();
-
-        return Material(
-          elevation: 8,
-          color: AppTheme.primary,
-          child: SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Row(
+          children: [
+            ClipOval(
+              child: Image.network(
+                widget.reciter.imageAsset,
+                width: 34,
+                height: 34,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  width: 34,
+                  height: 34,
+                  color: Colors.white24,
+                  child: const Icon(
+                    Icons.person,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ── Row 1: info + close ──
-                  InkWell(
-                    onTap: () => _openFullPlayer(context),
-                    child: Row(
+                  Text(
+                    widget.reciter.name,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '${_filtered.length} downloaded',
+                    style: const TextStyle(fontSize: 11, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      body: Column(
+        children: [
+          // ── Search bar ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              controller: _searchController,
+              style: const TextStyle(fontSize: 14, color: AppTheme.primary),
+              decoration: InputDecoration(
+                hintText: 'Search by surah name or number…',
+                hintStyle: const TextStyle(
+                  fontSize: 13,
+                  color: AppTheme.textSecondary,
+                ),
+                prefixIcon: const Icon(
+                  Icons.search,
+                  color: AppTheme.primary,
+                  size: 22,
+                ),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(
+                          Icons.close,
+                          size: 18,
+                          color: AppTheme.textSecondary,
+                        ),
+                        onPressed: () => _searchController.clear(),
+                      )
+                    : null,
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: BorderSide(
+                    color: AppTheme.primary.withOpacity(0.10),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(
+                    color: AppTheme.gold,
+                    width: 1.4,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Results ──
+          Expanded(
+            child: _filtered.isEmpty ? _buildNoResults() : _buildSurahList(),
+          ),
+        ],
+      ),
+      bottomNavigationBar: const FullSurahMiniPlayer(),
+    );
+  }
+
+  Widget _buildNoResults() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Text(
+          'No surah matched your search.',
+          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSurahList() {
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: _filtered.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (context, i) => _surahTile(_filtered[i]),
+    );
+  }
+
+  Widget _surahTile(int surahNumber) {
+    final meta = _AudioDownloadsScreenState._surahMeta[surahNumber];
+
+    return Consumer<FullSurahPlayer>(
+      builder: (context, player, _) {
+        final isThisSurah =
+            player.currentSurah == surahNumber &&
+            player.currentReciterId == widget.reciter.id;
+        final isPlaying = isThisSurah && player.isPlaying;
+        final isPaused = isThisSurah && !player.isPlaying && player.hasSurah;
+
+        return Material(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => _playSurah(surahNumber, meta),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                children: [
+                  // ── Star badge with number ──
+                  SizedBox(
+                    width: 42,
+                    height: 42,
+                    child: Stack(
+                      alignment: Alignment.center,
                       children: [
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: AppTheme.gold.withOpacity(0.15),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.graphic_eq,
-                            color: AppTheme.gold,
-                            size: 20,
-                          ),
+                        Icon(
+                          Icons.star,
+                          size: 42,
+                          color: AppTheme.gold.withOpacity(0.30),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                player.currentSurahName ??
-                                    'Surah ${player.currentSurah}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                '${player.selectedReciter.name} · '
-                                    'Ayah ${player.currentAyah ?? 1}',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                        Text(
+                          '$surahNumber',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary,
                           ),
+                          textScaler: TextScaler.linear(1),
                         ),
-                        IconButton(
-                          iconSize: 22,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.close, color: Colors.white70),
-                          onPressed: () => player.stop(),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // ── Name ──
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          meta?.english ?? 'Surah $surahNumber',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textScaler: TextScaler.linear(1),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isPlaying
+                              ? 'Playing…'
+                              : isPaused
+                              ? 'Paused'
+                              : '${meta?.ayahCount ?? "-"} ayahs · '
+                                    'downloaded',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isThisSurah
+                                ? AppTheme.gold
+                                : AppTheme.textSecondary,
+                            fontWeight: isThisSurah
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                          textScaler: TextScaler.linear(1),
                         ),
                       ],
                     ),
                   ),
 
-                  // ── Row 2: seek bar ──
-                  StreamBuilder<Duration>(
-                    stream: player.positionStream,
-                    builder: (context, snapshot) {
-                      final pos = snapshot.data ?? Duration.zero;
-                      final dur = player.duration ?? Duration.zero;
-                      final maxMs =
-                      dur.inMilliseconds.clamp(1, 1 << 31).toDouble();
-                      final val = pos.inMilliseconds
-                          .clamp(0, dur.inMilliseconds)
-                          .toDouble();
-                      return Row(
-                        children: [
-                          Text(
-                            _fmt(pos),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                            ),
-                          ),
-                          Expanded(
-                            child: SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: 2,
-                                thumbShape: const RoundSliderThumbShape(
-                                    enabledThumbRadius: 6),
-                                overlayShape: const RoundSliderOverlayShape(
-                                    overlayRadius: 12),
-                              ),
-                              child: Slider(
-                                value: val,
-                                max: maxMs,
-                                activeColor: AppTheme.gold,
-                                inactiveColor: Colors.white24,
-                                onChanged: (v) => player
-                                    .seek(Duration(milliseconds: v.toInt())),
-                              ),
-                            ),
-                          ),
-                          Text(
-                            _fmt(dur),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+                  // ── Arabic name ──
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Text(
+                      meta?.arabic ?? '',
+                      style: GoogleFonts.notoSansArabic(
+                        fontSize: 16,
+                        color: AppTheme.primary,
+                      ),
+                      textScaler: TextScaler.linear(1),
+                    ),
                   ),
 
-                  // ── Row 3: transport controls ──
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        iconSize: 34,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: const Icon(Icons.skip_previous_rounded,
-                            color: Colors.white),
-                        onPressed: player.previous,
-                      ),
-                      const SizedBox(width: 24),
-                      // Big play/pause button
-                      Material(
-                        color: AppTheme.gold,
-                        shape: const CircleBorder(),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: () {
-                            player.isPlaying
-                                ? player.pause()
-                                : player.resume();
-                          },
-                          child: SizedBox(
-                            width: 56,
-                            height: 56,
-                            child: Icon(
-                              player.isPlaying
-                                  ? Icons.pause_rounded
-                                  : Icons.play_arrow_rounded,
-                              color: AppTheme.primary,
-                              size: 32,
-                            ),
-                          ),
+                  // ── Play / Pause button ──
+                  Material(
+                    color: isThisSurah
+                        ? AppTheme.primary
+                        : AppTheme.surfaceContainer,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: () => _playSurah(surahNumber, meta),
+                      child: SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Icon(
+                          isPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          color: isThisSurah ? AppTheme.gold : AppTheme.primary,
+                          size: 24,
                         ),
                       ),
-                      const SizedBox(width: 24),
-                      IconButton(
-                        iconSize: 34,
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        icon: const Icon(Icons.skip_next_rounded,
-                            color: Colors.white),
-                        onPressed: player.next,
-                      ),
-                    ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+
+                  // ── Delete single surah button ──
+                  IconButton(
+                    tooltip: 'Delete downloaded surah',
+                    icon: const Icon(
+                      customIcons.delete,
+                      size: 20,
+                      color: AppTheme.textSecondary,
+                    ),
+                    onPressed: () => _confirmDeleteSurah(surahNumber, meta),
                   ),
                 ],
               ),
@@ -738,307 +815,93 @@ class _AudioMiniPlayer extends StatelessWidget {
     );
   }
 
-  static String _fmt(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
+  // ═════════════════════════════════════════════════════════════
+  // PLAY / PAUSE
+  // ═════════════════════════════════════════════════════════════
+  Future<void> _playSurah(int surahNumber, _SurahMeta? meta) async {
+    final player = context.read<FullSurahPlayer>();
 
-  void _openFullPlayer(BuildContext context) {
-    showModalBottomSheet(
+    final isThisSurah =
+        player.currentSurah == surahNumber &&
+        player.currentReciterId == widget.reciter.id;
+
+    if (isThisSurah) {
+      if (player.isPlaying) {
+        await player.pause();
+      } else {
+        await player.resume();
+      }
+      return;
+    }
+
+    await player.playDownloaded(
+      surahNumber: surahNumber,
+      reciterId: widget.reciter.id,
+      surahName: meta?.english ?? 'Surah $surahNumber',
+    );
+
+    if (!mounted) return;
+    toastification.show(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _FullPlayerSheet(),
-    );
-  }
-}
-
-class _FullPlayerSheet extends StatelessWidget {
-  const _FullPlayerSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.92,
-      minChildSize: 0.5,
-      maxChildSize: 0.95,
-      builder: (_, scrollCtrl) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppTheme.primary,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-          ),
-          child: Consumer<QuranAudioPlayer>(
-            builder: (context, player, _) {
-              return SafeArea(
-                top: false,
-                child: ListView(
-                  controller: scrollCtrl,
-                  padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-                  children: [
-                    // Handle
-                    Center(
-                      child: Container(
-                        width: 40, height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Header row: close
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.keyboard_arrow_down,
-                              color: Colors.white),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        const Spacer(),
-                        Text(
-                          'NOW PLAYING',
-                          style: TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 2,
-                            color: Colors.white.withOpacity(0.6),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const Spacer(),
-                        const SizedBox(width: 48),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Big artwork
-                    Center(
-                      child: Container(
-                        width: 180, height: 180,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              AppTheme.gold.withOpacity(0.9),
-                              AppTheme.gold.withOpacity(0.5),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.gold.withOpacity(0.3),
-                              blurRadius: 30,
-                              spreadRadius: 4,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.menu_book,
-                          size: 84,
-                          color: AppTheme.primary.withOpacity(0.85),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-
-                    // Surah name
-                    Center(
-                      child: Text(
-                        player.currentSurahName ??
-                            'Surah ${player.currentSurah ?? ""}',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Center(
-                      child: Text(
-                        '${player.selectedReciter.name} · '
-                            'Ayah ${player.currentAyah ?? 1}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withOpacity(0.7),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Seek bar
-                    StreamBuilder<Duration>(
-                      stream: player.positionStream,
-                      builder: (context, snapshot) {
-                        final pos = snapshot.data ?? Duration.zero;
-                        final dur = player.duration ?? Duration.zero;
-                        final maxMs = dur.inMilliseconds
-                            .clamp(1, 1 << 31)
-                            .toDouble();
-                        final val = pos.inMilliseconds
-                            .clamp(0, dur.inMilliseconds)
-                            .toDouble();
-                        return Column(
-                          children: [
-                            SliderTheme(
-                              data: SliderTheme.of(context).copyWith(
-                                trackHeight: 4,
-                                thumbShape: const RoundSliderThumbShape(
-                                    enabledThumbRadius: 7),
-                                overlayShape: const RoundSliderOverlayShape(
-                                    overlayRadius: 14),
-                                activeTrackColor: AppTheme.gold,
-                                inactiveTrackColor: Colors.white24,
-                                thumbColor: AppTheme.gold,
-                                overlayColor:
-                                AppTheme.gold.withOpacity(0.25),
-                              ),
-                              child: Slider(
-                                value: val,
-                                max: maxMs,
-                                onChanged: (v) => player.seek(
-                                    Duration(milliseconds: v.toInt())),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8),
-                              child: Row(
-                                mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    _fmtDur(pos),
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  Text(
-                                    _fmtDur(dur),
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Big transport controls
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        IconButton(
-                          iconSize: 42,
-                          icon: const Icon(Icons.skip_previous_rounded,
-                              color: Colors.white),
-                          onPressed: player.previous,
-                        ),
-                        const SizedBox(width: 20),
-                        Material(
-                          color: AppTheme.gold,
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: () {
-                              player.isPlaying
-                                  ? player.pause()
-                                  : player.resume();
-                            },
-                            child: SizedBox(
-                              width: 78,
-                              height: 78,
-                              child: Icon(
-                                player.isPlaying
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
-                                color: AppTheme.primary,
-                                size: 42,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 20),
-                        IconButton(
-                          iconSize: 42,
-                          icon: const Icon(Icons.skip_next_rounded,
-                              color: Colors.white),
-                          onPressed: player.next,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Reciter switcher preview
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.record_voice_over,
-                              color: AppTheme.gold, size: 22),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Reciter',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    letterSpacing: 1.5,
-                                    color: Colors.white54,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  player.selectedReciter.name,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close,
-                                color: Colors.white70, size: 22),
-                            onPressed: () {
-                              player.stop();
-                              Navigator.pop(context);
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
-        );
-      },
+      type: ToastificationType.success,
+      style: ToastificationStyle.flatColored,
+      title: Text(meta?.english ?? 'Surah $surahNumber'),
+      description: Text(widget.reciter.name),
+      autoCloseDuration: const Duration(seconds: 2),
+      icon: const Icon(Icons.offline_pin),
     );
   }
 
-  static String _fmtDur(Duration d) {
-    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
-    return '$m:$s';
+  Future<void> _confirmDeleteSurah(int surahNumber, _SurahMeta? meta) async {
+    final surahTitle = meta?.english ?? 'Surah ';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Surah?'),
+        content: Text('Delete \ for \ from downloads?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true || !mounted) return;
+
+    final player = context.read<FullSurahPlayer>();
+    if (player.currentSurah == surahNumber &&
+        player.currentReciterId == widget.reciter.id) {
+      await player.stop();
+    }
+
+    final dl = context.read<FullSurahDownloadProvider>();
+    await dl.deleteSurahForReciter(surahNumber, reciterId: widget.reciter.id);
+
+    setState(() {
+      widget.surahNumbers.remove(surahNumber);
+      _filtered.remove(surahNumber);
+    });
+
+    if (!mounted) return;
+    toastification.show(
+      context: context,
+      type: ToastificationType.success,
+      style: ToastificationStyle.flatColored,
+      title: const Text('Deleted'),
+      description: Text('\ deleted successfully'),
+      autoCloseDuration: const Duration(seconds: 2),
+      icon: const Icon(Icons.delete_outline),
+    );
   }
 }
