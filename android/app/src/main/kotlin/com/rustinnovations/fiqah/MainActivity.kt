@@ -1,4 +1,4 @@
-package com.rustinnovations.fiqha
+package com.rustinnovations.fiqah
 
 import io.flutter.embedding.android.FlutterActivity
 

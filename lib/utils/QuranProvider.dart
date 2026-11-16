@@ -37,6 +37,7 @@ class QuranProvider extends ChangeNotifier {
   Set<String> _downloadedTranslationEditions = {};
   bool _loadingTranslationEditions = false;
   String? _downloadingTranslationEdition;
+  double _translationDownloadProgress = 0.0;
   String? _translationError;
   int _translationRequestRevision = 0;
 
@@ -86,6 +87,7 @@ class QuranProvider extends ChangeNotifier {
       Set.unmodifiable(_downloadedTranslationEditions);
   bool get loadingTranslationEditions => _loadingTranslationEditions;
   String? get downloadingTranslationEdition => _downloadingTranslationEdition;
+  double get translationDownloadProgress => _translationDownloadProgress;
   String? get translationError => _translationError;
   bool get isSelectedTranslationDownloaded => _selectedTranslationEditions
       .every(_downloadedTranslationEditions.contains);
@@ -299,19 +301,29 @@ class QuranProvider extends ChangeNotifier {
 
     _translationError = null;
     _downloadingTranslationEdition = identifier;
+    _translationDownloadProgress = 0.0;
     notifyListeners();
     try {
-      await _repo.ensureTranslationDownloaded(identifier);
+      await _repo.ensureTranslationDownloaded(
+        identifier,
+        onProgress: (p) {
+          _translationDownloadProgress = p;
+          notifyListeners();
+        },
+      );
       _downloadedTranslationEditions = {
         ..._downloadedTranslationEditions,
         identifier,
       };
+      _translationDownloadProgress = 1.0;
+      notifyListeners();
       return true;
     } catch (error) {
       _translationError = error.toString();
       return false;
     } finally {
       _downloadingTranslationEdition = null;
+      _translationDownloadProgress = 0.0;
       notifyListeners();
     }
   }
@@ -333,7 +345,7 @@ class QuranProvider extends ChangeNotifier {
   Future<void> _loadTranslationPreferences() async {
     try {
       final preferences = await SharedPreferences.getInstance();
-      _translationEnabled = preferences.getBool(_showTranslationKey) ?? false;
+      _translationEnabled = preferences.getBool(_showTranslationKey) ?? true;
       final savedEditions = preferences.getStringList(_translationEditionsKey);
       _selectedTranslationEditions =
           savedEditions ??

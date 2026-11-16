@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Fiqha</string>
+	<string>Fiqah</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
     <string>Used to calculate Qibla direction</string>
     <key>UIBackgroundModes</key>

@@ -156,55 +156,31 @@ class AyahCard extends StatelessWidget {
           ),
 
           // ── Card Action Icons (strictly bottom-left aligned) ──
+          // ── Card Action Icons (bottom-left, with labels) ──
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                // 1. Change Translation Button
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: onChangeTranslation,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Icon(
-                            Icons.translate_rounded,
-                            size: 18,
-                            color: AppTheme.primary,
-                          ),
-                          SizedBox(width: 4),
-                          Text(
-                            'Translation',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                // 1. Change Translation
+                _actionPill(
+                  icon: Icons.translate_rounded,
+                  label: 'Translation',
+                  onTap: onChangeTranslation,
                 ),
-
                 const SizedBox(width: 4),
 
-                // 2. Bookmark Icon
-                IconButton(
-                  tooltip: isBookmarked ? 'Remove Bookmark' : 'Bookmark Ayat',
-                  icon: Icon(
-                    isBookmarked ? Icons.bookmark : Icons.bookmark_border_rounded,
-                    color: isBookmarked ? AppTheme.gold : AppTheme.primary,
-                    size: 22,
-                  ),
-                  onPressed: () async {
+                // 2. Bookmark
+                _actionPill(
+                  icon: isBookmarked
+                      ? Icons.bookmark
+                      : Icons.bookmark_border_rounded,
+                  label: isBookmarked ? 'Saved' : 'Bookmark',
+                  active: isBookmarked,
+                  onTap: () async {
                     if (isBookmarked) {
-                      await bookmarks.removeByAyah(surahNumber, ayah.numberInSurah);
+                      await bookmarks.removeByAyah(
+                          surahNumber, ayah.numberInSurah);
                       if (context.mounted) {
                         toastification.show(
                           context: context,
@@ -234,18 +210,16 @@ class AyahCard extends StatelessWidget {
                     }
                   },
                 ),
-
                 const SizedBox(width: 4),
 
-                // 3. Ayat Sound Icon
-                IconButton(
-                  tooltip: isPlaying ? 'Pause Recitation' : 'Play Ayat Audio',
-                  icon: Icon(
-                    isPlaying ? Icons.pause_circle_filled : Icons.volume_up_rounded,
-                    color: isPlaying ? AppTheme.gold : AppTheme.primary,
-                    size: 24,
-                  ),
-                  onPressed: () async {
+                // 3. Play / Pause Ayah audio
+                _actionPill(
+                  icon: isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.volume_up_rounded,
+                  label: isPlaying ? 'Pause' : 'Play',
+                  active: isPlaying,
+                  onTap: () async {
                     await audioPlayer.playSingleAyah(
                       surahNumber: surahNumber,
                       ayahNumber: ayah.numberInSurah,
@@ -257,6 +231,43 @@ class AyahCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _actionPill({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+    bool active = false,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: active ? AppTheme.gold : AppTheme.primary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: active ? AppTheme.gold : AppTheme.primary,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

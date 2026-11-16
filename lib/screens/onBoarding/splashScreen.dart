@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'package:quranpak/screens/Auth/Login.dart';
 import 'package:quranpak/screens/HomeScreen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class Splashscreen extends StatefulWidget {
   const Splashscreen({super.key});
@@ -19,31 +17,16 @@ class _SplashscreenState extends State<Splashscreen> {
   }
 
   void _navigate() async {
-    final prefs = await SharedPreferences.getInstance();
-
-   final isLoggedin = prefs.getBool("isLoggedIn") ?? false;
-
-
-    await Future.delayed(Duration(seconds: 5), () {
-      if(isLoggedin){
+    await Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) {
-            return HomeScreen();
+            return const HomeScreen();
           },
         ),
       );
-    }else {
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) {
-              return LoginScreen();
-            },
-          ),
-        );
-      }
     });
   }
 

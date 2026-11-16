@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:quranpak/screens/Auth/Login.dart';
 import 'package:quranpak/screens/FullAudioPlayerScreen.dart';
 import 'package:quranpak/screens/QuranScreen.dart';
 import 'package:quranpak/screens/Audio.dart';
@@ -140,7 +142,19 @@ class _HomeScreenState extends State<HomeScreen>
             const FullSurahMiniPlayer(),
             AppBottomNav(
               selectedIndex: _selectedIndex,
-              onTap: (i) => setState(() => _selectedIndex = i),
+              onTap: (i) {
+                if (i == 4) {
+                  final user = FirebaseAuth.instance.currentUser;
+                  if (user == null) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    );
+                    return;
+                  }
+                }
+                setState(() => _selectedIndex = i);
+              },
               items: const [
                 NavDestination(icon: customIcons.home, label: 'Home'),
                 NavDestination(icon: customIcons.quran, label: 'Quran'),
@@ -327,10 +341,10 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
+      BuildContext context,
+      double shrinkOffset,
+      bool overlapsContent,
+      ) {
     return Container(color: Colors.white, child: _tabBar);
   }
 

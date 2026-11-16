@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
@@ -36,6 +37,59 @@ class _ParsedRow {
     required this.normUrduStart,
     required this.normArabicStart,
   });
+}
+
+List<_ParsedRow> _parseRawItems(List<dynamic> rawItems) {
+  String norm(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[\u064B-\u065F\u0670]'), '')
+      .replaceAll(RegExp(r'[إأآا]'), 'ا')
+      .replaceAll(RegExp(r'ى'), 'ی')
+      .replaceAll(RegExp(r'ة'), 'ہ')
+      .replaceAll(RegExp(r'[^\w\u0600-\u06FF ]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  Set<String> parseJsonSet(String raw) {
+    if (raw.trim().isEmpty) return const {};
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List)
+        return decoded
+            .map((e) => norm(e.toString()))
+            .where((e) => e.isNotEmpty)
+            .toSet();
+    } catch (_) {}
+    return const {};
+  }
+
+  return rawItems.map((item) {
+    final nAr = norm(item.arabic),
+        nUr = norm(item.urdu),
+        nEn = norm(item.english);
+    return _ParsedRow(
+      hadith: item.toHadith(),
+      number: item.hadithNumber,
+      topics: parseJsonSet(item.topics),
+      keywordsEng: parseJsonSet(item.keywordsEng),
+      keywordsUrdu: parseJsonSet(item.keywordsUrdu),
+      normHeading: norm(
+        '${item.headingEn} ${item.headingUr} ${item.headingAr}',
+      ),
+      normBody: '$nAr $nUr $nEn',
+      normArabic: nAr,
+      normUrdu: nUr,
+      normEng: nEn,
+      normUrduStart: norm(
+        item.urdu.length > 120 ? item.urdu.substring(0, 120) : item.urdu,
+      ),
+      normArabicStart: norm(
+        item.arabic.length > 120
+            ? item.arabic.substring(0, 120)
+            : item.arabic,
+      ),
+    );
+  }).toList();
 }
 
 class HadithSearchScreen extends StatefulWidget {
@@ -130,33 +184,7 @@ class _HadithSearchScreenState extends State<HadithSearchScreen> {
     final rawItems = await HadithDb.getAllHadithsOfCollection(
       widget.dbFileName,
     );
-    final parsed = rawItems.map((item) {
-      final nAr = norm(item.arabic),
-          nUr = norm(item.urdu),
-          nEn = norm(item.english);
-      return _ParsedRow(
-        hadith: item.toHadith(),
-        number: item.hadithNumber,
-        topics: _parseJsonSet(item.topics),
-        keywordsEng: _parseJsonSet(item.keywordsEng),
-        keywordsUrdu: _parseJsonSet(item.keywordsUrdu),
-        normHeading: norm(
-          '${item.headingEn} ${item.headingUr} ${item.headingAr}',
-        ),
-        normBody: '$nAr $nUr $nEn',
-        normArabic: nAr,
-        normUrdu: nUr,
-        normEng: nEn,
-        normUrduStart: norm(
-          item.urdu.length > 120 ? item.urdu.substring(0, 120) : item.urdu,
-        ),
-        normArabicStart: norm(
-          item.arabic.length > 120
-              ? item.arabic.substring(0, 120)
-              : item.arabic,
-        ),
-      );
-    }).toList();
+    final parsed = await compute(_parseRawItems, rawItems);
 
     if (!mounted) return;
     setState(() {
@@ -289,7 +317,7 @@ class _HadithSearchScreenState extends State<HadithSearchScreen> {
               onChanged: _onQueryChanged,
               style: const TextStyle(fontSize: 14, color: ink),
               decoration: InputDecoration(
-                hintText: 'Search by number, topic, or narrator…',
+                hintText: 'Search by number, topic, or Ravi…',
                 hintStyle: TextStyle(
                   color: ink.withValues(alpha: 0.45),
                   fontSize: 13,
@@ -341,7 +369,7 @@ class _HadithSearchScreenState extends State<HadithSearchScreen> {
                 const SizedBox(width: 8),
                 _tabChip('By Number', _SearchTab.number),
                 const SizedBox(width: 8),
-                _tabChip('By Narrator', _SearchTab.narrator),
+                _tabChip('By Ravi', _SearchTab.narrator),
               ],
             ),
           ),

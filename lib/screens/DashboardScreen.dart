@@ -1,11 +1,15 @@
 import 'dart:async' show Timer, unawaited;
+import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:page_transition/page_transition.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:quranpak/helper/getDate.dart';
@@ -14,8 +18,11 @@ import 'package:quranpak/screens/AllDuasScreen.dart';
 import 'package:quranpak/screens/Audio.dart';
 import 'package:quranpak/screens/HadithBooksScreen.dart';
 import 'package:quranpak/screens/IslamicCalendarScreen.dart';
+import 'package:quranpak/screens/NotificationScreen.dart';
 import 'package:quranpak/screens/QiblaFinder.dart';
+import 'package:quranpak/screens/QuranScreen.dart';
 import 'package:quranpak/screens/SurahReaderScreen.dart';
+import 'package:quranpak/screens/Auth/Login.dart';
 import 'package:quranpak/screens/BookmarksScreen.dart';
 import 'package:quranpak/screens/WeatherDetailScreen.dart';
 import 'package:quranpak/screens/counter.dart';
@@ -27,16 +34,42 @@ import 'package:quranpak/widgets/AdhkarItem.dart';
 import 'package:quranpak/widgets/customIcons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:hijri/hijri_calendar.dart';
 import 'package:quranpak/services/DuaApiService.dart';
 
 import '../models/DuaModel.dart';
 import '../models/LastReadProgress.dart';
+import '../utils/hadees_share_card.dart';
 import '../utils/AppTheme.dart';
 import '../utils/LastReadProvider.dart';
 import '../utils/islamicDuaData.dart';
 import '../models/DailyAyah.dart';
 import '../models/DailyHadees.dart';
 import '../services/DailyContentService.dart';
+
+class DashboardIslamicEvent {
+  final int hijriMonth;
+  final int hijriDay;
+  final String title;
+  final String titleUr;
+  final String description;
+  final String descriptionUr;
+  final String wikiEn;
+  final String wikiUr;
+  final bool isHoliday;
+
+  const DashboardIslamicEvent({
+    required this.hijriMonth,
+    required this.hijriDay,
+    required this.title,
+    required this.titleUr,
+    required this.description,
+    required this.descriptionUr,
+    required this.wikiEn,
+    required this.wikiUr,
+    this.isHoliday = false,
+  });
+}
 
 class DashboardScreen extends StatefulWidget {
   final VoidCallback? onQuranTap;
@@ -94,6 +127,16 @@ class _HorizontalQuickActionsState extends State<_HorizontalQuickActions> {
       widget.onQuranTap!();
       return;
     }
+    if (item.title == 'Bookmarks') {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+        return;
+      }
+    }
     if (item.onTapOverride != null) {
       item.onTapOverride!();
       return;
@@ -103,24 +146,27 @@ class _HorizontalQuickActionsState extends State<_HorizontalQuickActions> {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 90,
-      child: ListView.separated(
-        controller: _controller,
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        itemCount: widget.items.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, index) {
-          final item = widget.items[index];
-          return _ActionTile(
-            icon: item.icon,
-            label: item.title,
-            onTap: () => _onTap(item),
-          );
-        },
-      ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      itemCount: widget.items.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 5,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 4,
+        childAspectRatio: 0.78,
+      ), itemBuilder: (BuildContext context, int index) {
+      final item = widget.items[index];
+      return _ActionTile(
+        icon: item.icon,
+        label: item.title,
+        onTap: () => _onTap(item),
+      );
+
+    },
+
+
     );
   }
 }
@@ -179,6 +225,39 @@ class _ActionTile extends StatelessWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  static const List<String> juzNamesArabic = [
+    "الف لآم میم",
+    "سیقول",
+    "تلك الرسل",
+    "لن تنالوا",
+    "والحصنت",
+    "لا یحب اللہ",
+    "و اذا سمعوا",
+    "و لو اننا",
+    "قال الملأ",
+    "واعلموا",
+    "یعتذرون",
+    "و ما من دآبۃ",
+    "و ما ابرئ",
+    "ربما",
+    "سبحن الذی",
+    "قال الم",
+    "اقترب للناس",
+    "قد افلح",
+    "و قال الذین",
+    "امن خلق",
+    "اتل ما اوحی",
+    "و من یقنت",
+    "و مالی",
+    "فمن اظلم",
+    "الیہ یرد",
+    "حم",
+    "قال فما خطبکم",
+    "قد سمع اللہ",
+    "تبارك الذی",
+    "عم یتسآءلون",
+  ];
+
   bool _isLoading = true;
   WeatherData? _weatherData;
 
@@ -218,28 +297,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   };
 
   // Row 1 — top 5 quick actions
-  static const List<_QuickMenuItem> _primaryMenus = [
-    _QuickMenuItem(
+  static final List<_QuickMenuItem> _primaryMenus = [
+    const _QuickMenuItem(
       title: 'Quran',
       icon: customIcons.quran,
-      screen: SurahReaderScreen(),
+      screen: QuranHomeScreen(),
     ),
-    _QuickMenuItem(
+    const _QuickMenuItem(
       title: 'Audio',
       icon: customIcons.audio,
       screen: AudioDownloadsScreen(),
     ),
-    _QuickMenuItem(
+    const _QuickMenuItem(
       title: 'Duas',
       icon: customIcons.dua,
       screen: AllDuasScreen(),
     ),
-    _QuickMenuItem(
+    const _QuickMenuItem(
       title: 'Counter',
       icon: customIcons.counter,
       screen: TasbihScreen(),
     ),
-    _QuickMenuItem(
+    const _QuickMenuItem(
       title: 'Qibla',
       icon: customIcons.direction,
       screen: QiblaScreen(),
@@ -455,7 +534,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _openLastRead(LastReadProgress? progress) {
     final screen = progress == null
-        ? const SurahReaderScreen(surahNumber: 1, scrollToAyah: 1)
+        ? SurahReaderScreen(surahNumber: 1, scrollToAyah: 1)
         : progress.readerType == 'juz'
         ? SurahReaderScreen(
             juzNumber: progress.readerSectionNumber,
@@ -633,9 +712,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .get();
 
         if (doc.exists) {
-          _maslak = doc.data()?['maslak'];
+          _maslak = doc.data()?['maslak'] ?? 'Hanafi';
         }
       }
+      _maslak ??= prefs.getString('cached_maslak') ?? 'Hanafi';
 
       // Get location, city, country and timezone
       final location = await LocationService.getCurrentLocation();
@@ -1052,24 +1132,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     Row(
                       children: [
-                        const Icon(
-                          Icons.notifications_none,
+                        IconButton(
+                          splashRadius: 30,
+                          tooltip: "Notification",
+                          visualDensity: VisualDensity.compact,
+                          onPressed: (){
+                            Navigator.push(
+                              context,
+                              PageTransition(type: PageTransitionType.rightToLeft, child: Notificationscreen(), duration: Duration(milliseconds: 300)),
+                            );
+                          },
+                         icon: const Icon(Icons.notifications_none),
                           color: Colors.black54,
                         ),
                         const SizedBox(width: 16),
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.grey.shade300,
-                          backgroundImage: photoUrl != null
-                              ? NetworkImage(photoUrl)
-                              : null,
-                          child: photoUrl == null
-                              ? const Icon(
-                                  customIcons.profile,
-                                  size: 22,
-                                  color: Colors.grey,
-                                )
-                              : null,
+
+                        InkWell(
+                          radius: 30,
+                         customBorder: CircleBorder(),
+                         onTap: () {
+                           if(user!.isAnonymous) {
+                           Navigator.push(context, PageTransition(type: PageTransitionType.fade, child: LoginScreen(), duration: Duration(milliseconds: 300)));
+                           }
+                         },
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: Colors.grey.shade300,
+                            backgroundImage: photoUrl != null
+                                ? NetworkImage(photoUrl)
+                                : null,
+                            child: photoUrl == null
+                                ? const Icon(
+                                    customIcons.profile,
+                                    size: 22,
+                                    color: Colors.grey,
+                                  )
+                                : null,
+                          ),
                         ),
                       ],
                     ),
@@ -1480,11 +1579,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                         ? 'START RECITING'
                                         : 'LAST RECITED',
                                     style: GoogleFonts.inter(
-                                      fontSize: 11,
+                                      fontSize: 16,
                                       fontWeight: FontWeight.w600,
                                       letterSpacing: 1.2,
                                       color: const Color(0xFF8D6E63),
                                     ),
+                                    textScaler: TextScaler.linear(1),
                                   ),
                                 ],
                               ),
@@ -1571,116 +1671,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     );
                   },
                 ),
+                const SizedBox(height: 16),
+                const _BannersSlider(),
                 const SizedBox(height: 24),
 
-                // Ramadan Challenge
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F3D26),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.stars,
-                            color: Color(0xFFE2B76C),
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'RAMADAN KHATAM CHALLENGE',
-                            style: GoogleFonts.inter(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.2,
-                              color: const Color(0xFFE2B76C),
-                            ),
-                            textScaler: TextScaler.linear(1),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Complete the Noble Quran this\nHoly Month',
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                        textScaler: TextScaler.linear(1),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Join 84,200 believers worldwide on a 4-\npages-after-each-prayer journey',
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: Colors.white70,
-                        ),
-                        textScaler: TextScaler.linear(1),
-                      ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 8,
-                            ),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF8D6E63),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              'Join Challenge',
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                              textScaler: TextScaler.linear(1),
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Container(
-                                width: 16,
-                                height: 4,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE2B76C),
-                                  borderRadius: BorderRadius.circular(2),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Container(
-                                width: 4,
-                                height: 4,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white30,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Container(
-                                width: 4,
-                                height: 4,
-                                decoration: const BoxDecoration(
-                                  color: Colors.white30,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+
 
                 // Ayah of the day
                 _buildAyahOfTheDay(),
@@ -1698,17 +1693,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 const SizedBox(height: 40),
 
-                _buildDuasHubCard(context),
+                _buildUpcomingEventsCard(context),
 
-                ElevatedButton(
-                  onPressed: () async {
-                    await AzanService.testNow();
-                    if (mounted) {
-                      _showAzanAlarmDialog('Test Azan');
-                    }
-                  },
-                  child: const Text("Test Azan"),
-                ),
+                SizedBox(height: 30,)
               ],
             ),
           ),
@@ -1717,9 +1704,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildDuasHubCard(BuildContext context) {
-    final sections = IslamicDuasData.allSections;
-    final totalCount = sections.fold<int>(0, (a, b) => a + b.value.length);
+  Widget _buildUpcomingEventsCard(BuildContext context) {
+    final hijri = HijriCalendar.now();
+    final currentMonth = hijri.hMonth;
+
+    const monthNames = [
+      'Muharram', 'Safar', 'Rabi al-Awwal', 'Rabi al-Thani',
+      'Jumada al-Awwal', 'Jumada al-Thani', 'Rajab', "Sha'ban",
+      'Ramadan', 'Shawwal', 'Dhu al-Qa\'dah', 'Dhu al-Hijjah'
+    ];
+    final monthName = monthNames[(currentMonth - 1).clamp(0, 11)];
+
+    final eventsInMonth = _upcomingEventsList.where((e) => e.hijriMonth == currentMonth).toList();
+    eventsInMonth.sort((a, b) => a.hijriDay.compareTo(b.hijriDay));
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1751,7 +1748,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
-                  Icons.menu_book,
+                  Icons.event_note_rounded,
                   color: AppTheme.gold,
                   size: 22,
                 ),
@@ -1762,7 +1759,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Islamic Duas',
+                      'Upcoming Events',
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.bold,
@@ -1771,7 +1768,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$totalCount duas across ${sections.length} categories',
+                      '$monthName (Hijri $currentMonth) · ${eventsInMonth.length} events',
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.white.withOpacity(0.7),
@@ -1788,35 +1785,461 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 14),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: sections.map((s) {
-              return Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppTheme.gold.withOpacity(0.30)),
-                ),
-                child: Text(
-                  '${s.key} · ${s.value.length}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w500,
+          if (eventsInMonth.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No special events scheduled for $monthName.',
+                style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8)),
+              ),
+            )
+          else
+            Column(
+              children: eventsInMonth.map((e) {
+                return InkWell(
+                  onTap: () => _showEventDetailsBottomSheet(context, e, monthName),
+                  borderRadius: BorderRadius.circular(10),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppTheme.gold.withOpacity(0.20)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppTheme.gold.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'Day ${e.hijriDay}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.gold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.title,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Directionality(
+                                textDirection: TextDirection.rtl,
+                                child: Text(
+                                  e.titleUr,
+                                  style: TextStyle(
+                                    fontFamily: 'notoNastaliqUrdu',
+                                    fontSize: 11,
+                                    color: Colors.white.withOpacity(0.8),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right,
+                          color: AppTheme.gold,
+                          size: 18,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              );
-            }).toList(),
-          ),
+                );
+              }).toList(),
+            ),
         ],
       ),
     );
   }
+
+  void _showEventDetailsBottomSheet(BuildContext context, DashboardIslamicEvent e, String monthName) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Day ${e.hijriDay} • $monthName',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primary,
+                      ),
+                    ),
+                  ),
+                  if (e.isHoliday) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.gold.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'Blessed Occasion',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF8A6D1F),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                e.title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Directionality(
+                textDirection: TextDirection.rtl,
+                child: Text(
+                  e.titleUr,
+                  style: TextStyle(
+                    fontFamily: 'notoNastaliqUrdu',
+                    fontSize: 16,
+                    color: AppTheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 16),
+              const Text(
+                'Description',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                e.description,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  height: 1.6,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Directionality(
+                textDirection: TextDirection.rtl,
+                child: Text(
+                  e.descriptionUr,
+                  style: TextStyle(
+                    fontFamily: 'notoNastaliqUrdu',
+                    fontSize: 13,
+                    color: Colors.black87,
+                    height: 2.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              _EventHistory(
+                wikiEn: e.wikiEn,
+                wikiUr: e.wikiUr,
+                accent: AppTheme.primary,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static const List<DashboardIslamicEvent> _upcomingEventsList = [
+    // ═══════════════ MUHARRAM (1) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 1, hijriDay: 1,
+      title: 'Islamic New Year', titleUr: 'اسلامی نیا سال',
+      description: 'The first day of the Hijri year, marking the migration (Hijrah) of Prophet Muhammad ﷺ from Makkah to Madinah.',
+      descriptionUr: 'ہجری سال کا پہلا دن، جو نبی کریم ﷺ کی مکہ سے مدینہ ہجرت کی یاد دلاتا ہے۔',
+      wikiEn: 'Islamic New Year', wikiUr: 'اسلامی نیا سال',
+      isHoliday: true,
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 1, hijriDay: 9,
+      title: 'Day of Tasu\'a', titleUr: 'یومِ تاسوعہ',
+      description: 'The 9th of Muharram. Fasting on this day is recommended along with Ashura.',
+      descriptionUr: '9 محرم الحرام۔ عاشورہ کے ساتھ اس دن کا روزہ رکھنا مستحب ہے۔',
+      wikiEn: 'Tasu\'a', wikiUr: 'تاسوعہ',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 1, hijriDay: 10,
+      title: 'Day of Ashura', titleUr: 'یومِ عاشورہ',
+      description: 'The 10th of Muharram. Fasting on this day expiates the sins of the previous year. Also marks the martyrdom of Imam Hussain (RA) at Karbala.',
+      descriptionUr: '10 محرم الحرام۔ اس دن کا روزہ گزشتہ سال کے گناہوں کا کفارہ ہے۔ کربلا میں امام حسینؓ کی شہادت کا دن بھی ہے۔',
+      wikiEn: 'Ashura', wikiUr: 'عاشورہ',
+      isHoliday: true,
+    ),
+
+    // ═══════════════ SAFAR (2) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 2, hijriDay: 27,
+      title: 'Hijrah of Prophet ﷺ', titleUr: 'ہجرتِ نبی ﷺ',
+      description: 'Commemoration of the Prophet\'s ﷺ migration from Makkah to Madinah.',
+      descriptionUr: 'نبی کریم ﷺ کی مکہ سے مدینہ منورہ ہجرت کی یادگار۔',
+      wikiEn: 'Hijrah', wikiUr: 'ہجرت نبوی',
+    ),
+
+    // ═══════════════ RABI AL-AWWAL (3) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 3, hijriDay: 12,
+      title: 'Mawlid un-Nabi ﷺ', titleUr: 'میلاد النبی ﷺ',
+      description: 'The birth of Prophet Muhammad ﷺ. Celebrated by many Muslims worldwide with prayers and remembrance.',
+      descriptionUr: 'نبی کریم ﷺ کی ولادت باسعادت۔ دنیا بھر کے مسلمان اس دن کو ذکر و درود سے مناتے ہیں۔',
+      wikiEn: 'Mawlid', wikiUr: 'میلاد النبی',
+      isHoliday: true,
+    ),
+
+    // ═══════════════ RABI AL-THANI (4) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 4, hijriDay: 11,
+      title: 'Urs of Abdul Qadir Jilani', titleUr: 'عرس حضرت عبدالقادر جیلانیؒ',
+      description: 'Commemoration of Sheikh Abdul Qadir Jilani (RA), the great Sufi saint and founder of the Qadiriyya order.',
+      descriptionUr: 'حضرت شیخ عبدالقادر جیلانیؒ کی یاد میں، جو عظیم صوفی بزرگ اور سلسلہ قادریہ کے بانی ہیں۔',
+      wikiEn: 'Abdul Qadir Gilani', wikiUr: 'عبدالقادر جیلانی',
+    ),
+
+    // ═══════════════ JUMADA AL-AWWAL (5) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 5, hijriDay: 5,
+      title: 'Battle of Mutah', titleUr: 'جنگِ موتہ',
+      description: 'Commemoration of the Battle of Mutah where Khalid bin Walid (RA) earned the title "Sword of Allah".',
+      descriptionUr: 'جنگِ موتہ کی یادگار، جس میں حضرت خالد بن ولیدؓ کو "سیف اللہ" کا لقب ملا۔',
+      wikiEn: 'Battle of Mu\'tah', wikiUr: 'جنگ موتہ',
+    ),
+
+    // ═══════════════ JUMADA AL-THANI (6) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 6, hijriDay: 22,
+      title: 'Hazrat Abu Bakr Siddiq (RA)', titleUr: 'حضرت ابوبکر صدیقؓ',
+      description: 'Commemoration of the passing of the first Caliph of Islam.',
+      descriptionUr: 'اسلام کے پہلے خلیفہ کی یاد میں۔',
+      wikiEn: 'Abu Bakr', wikiUr: 'ابوبکر صدیق',
+    ),
+
+    // ═══════════════ RAJAB (7) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 7, hijriDay: 1,
+      title: 'Start of Rajab', titleUr: 'رجب کی ابتدا',
+      description: 'Beginning of the sacred month of Rajab, one of the four sacred months in Islam.',
+      descriptionUr: 'ماہِ رجب کا آغاز، جو اسلام کے چار حرمت والے مہینوں میں سے ایک ہے۔',
+      wikiEn: 'Rajab', wikiUr: 'رجب',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 7, hijriDay: 13,
+      title: 'Birth of Ali (RA)', titleUr: 'ولادتِ حضرت علیؓ',
+      description: 'Birth anniversary of Hazrat Ali ibn Abi Talib (RA), the fourth Caliph of Islam.',
+      descriptionUr: 'چوتھے خلیفہ حضرت علی ابن ابی طالبؓ کی ولادت کی یادگار۔',
+      wikiEn: 'Ali', wikiUr: 'علی بن ابی طالب',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 7, hijriDay: 27,
+      title: 'Isra & Mi\'raj', titleUr: 'شبِ معراج',
+      description: 'The Night Journey of Prophet Muhammad ﷺ from Makkah to Jerusalem and ascension to the heavens.',
+      descriptionUr: 'نبی کریم ﷺ کا مکہ سے بیت المقدس اور پھر آسمانوں تک کا سفرِ معراج۔',
+      wikiEn: 'Isra and Mi\'raj', wikiUr: 'معراج',
+      isHoliday: true,
+    ),
+
+    // ═══════════════ SHA\'BAN (8) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 8, hijriDay: 1,
+      title: 'Start of Sha\'ban', titleUr: 'شعبان کی ابتدا',
+      description: 'Beginning of the month preceding Ramadan. A time for increased worship and preparation.',
+      descriptionUr: 'رمضان سے پہلے مہینے کا آغاز۔ عبادت اور تیاری کا وقت۔',
+      wikiEn: 'Sha\'ban', wikiUr: 'شعبان',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 8, hijriDay: 15,
+      title: 'Shab-e-Barat', titleUr: 'شبِ برات',
+      description: 'The 15th night of Sha\'ban, a night of forgiveness and blessings. Many Muslims spend it in prayer and fasting.',
+      descriptionUr: 'شعبان کی 15ویں شب، جو بخشش اور برکتوں کی رات ہے۔ بہت سے مسلمان اسے عبادت اور روزے میں گزارتے ہیں۔',
+      wikiEn: 'Mid-Sha\'ban', wikiUr: 'شب برات',
+      isHoliday: true,
+    ),
+
+    // ═══════════════ RAMADAN (9) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 9, hijriDay: 1,
+      title: 'First Day of Ramadan', titleUr: 'رمضان کا پہلا دن',
+      description: 'The beginning of the blessed month of fasting, the 4th pillar of Islam.',
+      descriptionUr: 'ماہِ صیام کا آغاز، جو اسلام کا چوتھا رکن ہے۔',
+      wikiEn: 'Ramadan', wikiUr: 'رمضان',
+      isHoliday: true,
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 9, hijriDay: 17,
+      title: 'Battle of Badr', titleUr: 'جنگِ بدر',
+      description: 'Commemoration of the first major battle of Islam on the 17th of Ramadan.',
+      descriptionUr: '17 رمضان کو اسلام کی پہلی بڑی جنگ کی یادگار۔',
+      wikiEn: 'Battle of Badr', wikiUr: 'جنگ بدر',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 9, hijriDay: 21,
+      title: 'Martyrdom of Ali (RA)', titleUr: 'شہادتِ حضرت علیؓ',
+      description: 'Commemoration of the martyrdom of Hazrat Ali ibn Abi Talib (RA), the 4th Caliph.',
+      descriptionUr: 'چوتھے خلیفہ حضرت علی ابن ابی طالبؓ کی شہادت کی یادگار۔',
+      wikiEn: 'Assassination of Ali', wikiUr: 'علی بن ابی طالب',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 9, hijriDay: 27,
+      title: 'Laylat al-Qadr', titleUr: 'شبِ قدر',
+      description: 'The Night of Power, better than a thousand months. Most likely to occur on the 27th night of Ramadan.',
+      descriptionUr: 'شبِ قدر، ہزار مہینوں سے بہتر۔ غالب امکان ہے کہ رمضان کی 27ویں شب کو ہو۔',
+      wikiEn: 'Laylat al-Qadr', wikiUr: 'شب قدر',
+      isHoliday: true,
+    ),
+
+    // ═══════════════ SHAWWAL (10) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 10, hijriDay: 1,
+      title: 'Eid ul-Fitr', titleUr: 'عید الفطر',
+      description: 'The Festival of Breaking the Fast, celebrated on the 1st of Shawwal after the completion of Ramadan.',
+      descriptionUr: 'عید الفطر، جو رمضان کے اختتام پر یکم شوال کو منائی جاتی ہے۔',
+      wikiEn: 'Eid al-Fitr', wikiUr: 'عید الفطر',
+      isHoliday: true,
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 10, hijriDay: 2,
+      title: 'Second Day of Eid', titleUr: 'عید کا دوسرا دن',
+      description: 'Continued celebration of Eid ul-Fitr with family and community.',
+      descriptionUr: 'عید الفطر کی خوشیاں خاندان اور محلے کے ساتھ جاری۔',
+      wikiEn: 'Eid al-Fitr', wikiUr: 'عید الفطر',
+    ),
+
+    // ═══════════════ DHU AL-QADAH (11) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 11, hijriDay: 1,
+      title: 'Start of Dhu al-Qadah', titleUr: 'ذیقعدہ کی ابتدا',
+      description: 'Beginning of the 11th month, one of the four sacred months.',
+      descriptionUr: 'گیارہویں مہینے کا آغاز، جو چار حرمت والے مہینوں میں شامل ہے۔',
+      wikiEn: 'Dhu al-Qi\'dah', wikiUr: 'ذوالقعدہ',
+    ),
+
+    // ═══════════════ DHU AL-HIJJAH (12) ═══════════════
+    DashboardIslamicEvent(
+      hijriMonth: 12, hijriDay: 1,
+      title: 'Start of Dhu al-Hijjah', titleUr: 'ذی الحجہ کی ابتدا',
+      description: 'Beginning of the sacred month of Hajj. First 10 days are the most blessed days of the year.',
+      descriptionUr: 'حج کے مہینے کا آغاز۔ پہلے دس دن سال کے سب سے بابرکت دن ہیں۔',
+      wikiEn: 'Dhu al-Hijjah', wikiUr: 'ذوالحجہ',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 12, hijriDay: 8,
+      title: 'Day of Tarwiyah', titleUr: 'یومِ ترویہ',
+      description: 'The 8th of Dhu al-Hijjah, when pilgrims travel to Mina.',
+      descriptionUr: '8 ذی الحجہ، جب حاجی منیٰ کی طرف روانہ ہوتے ہیں۔',
+      wikiEn: 'Tarwiyah', wikiUr: 'یوم ترویہ',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 12, hijriDay: 9,
+      title: 'Day of Arafah', titleUr: 'یومِ عرفہ',
+      description: 'The most important day of Hajj. Fasting on this day expiates the sins of two years.',
+      descriptionUr: 'حج کا سب سے اہم دن۔ اس دن کا روزہ دو سال کے گناہوں کا کفارہ ہے۔',
+      wikiEn: 'Day of Arafah', wikiUr: 'یوم عرفہ',
+      isHoliday: true,
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 12, hijriDay: 10,
+      title: 'Eid ul-Adha', titleUr: 'عید الاضحیٰ',
+      description: 'The Festival of Sacrifice, commemorating Prophet Ibrahim\'s (AS) willingness to sacrifice his son.',
+      descriptionUr: 'عید قربان، حضرت ابراہیمؑ کی قربانی کی تیاری کی یادگار۔',
+      wikiEn: 'Eid al-Adha', wikiUr: 'عید الاضحیٰ',
+      isHoliday: true,
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 12, hijriDay: 11,
+      title: 'Days of Tashreeq', titleUr: 'ایامِ تشریق',
+      description: '11th-13th of Dhu al-Hijjah. Days of eating, drinking, and remembrance of Allah.',
+      descriptionUr: '11 تا 13 ذی الحجہ۔ کھانے، پینے اور ذکرِ الٰہی کے دن۔',
+      wikiEn: 'Days of Tashreeq', wikiUr: 'ایام تشریق',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 12, hijriDay: 12,
+      title: 'Days of Tashreeq', titleUr: 'ایامِ تشریق',
+      description: 'Continued days of Tashreeq and remembrance of Allah.',
+      descriptionUr: 'ایامِ تشریق اور ذکرِ الٰہی کا سلسلہ جاری۔',
+      wikiEn: 'Days of Tashreeq', wikiUr: 'ایام تشریق',
+    ),
+    DashboardIslamicEvent(
+      hijriMonth: 12, hijriDay: 13,
+      title: 'Days of Tashreeq (End)', titleUr: 'ایامِ تشریق (اختتام)',
+      description: 'Last day of Tashreeq. Pilgrims perform the final stoning ritual.',
+      descriptionUr: 'تشریق کا آخری دن۔ حاجی آخری رمی کرتے ہیں۔',
+      wikiEn: 'Days of Tashreeq', wikiUr: 'ایام تشریق',
+    ),
+  ];
 
   Widget _buildRandomDuaCard() {
     return Container(
@@ -1868,11 +2291,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Text(
                         'DUA OF THE DAY',
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 16,
                           letterSpacing: 1.5,
                           fontWeight: FontWeight.w600,
-                          color: AppTheme.gold,
+                          color: const Color(0xFF8D6E63),
                         ),
+                        textScaler: TextScaler.linear(1),
                       ),
                     ),
                   ],
@@ -2001,9 +2425,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const Icon(Icons.sunny, color: Color(0xFFD6C09C), size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    'AYAH OF THE\nDAY',
+                    'AYAH OF THE DAY',
                     style: GoogleFonts.inter(
-                      fontSize: 10,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.2,
                       color: const Color(0xFF8D6E63),
@@ -2075,18 +2499,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Row(
                 children: [
-                  _iconAction(
-                    Icons.volume_up_outlined,
-                    onTap: a.audioUrl == null
-                        ? null
-                        : () {
-                            /* play audio */
-                          },
-                  ),
-                  const SizedBox(width: 16),
-                  _iconAction(Icons.bookmark_border),
-                  const SizedBox(width: 16),
-                  _iconAction(Icons.share_outlined),
+                  // // _iconAction(
+                  // //   Icons.volume_up_outlined,
+                  // //   onTap: a.audioUrl == null
+                  // //       ? null
+                  // //       : () {
+                  // //           /* play audio */
+                  // //         },
+                  // // ),
+                  // const SizedBox(width: 16),
+                  _iconAction(Icons.share_outlined, onTap: () => shareAyahAsCard(context, a)),
                 ],
               ),
             ],
@@ -2133,7 +2555,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Text(
                     'HADEES OF THE\nDAY',
                     style: GoogleFonts.inter(
-                      fontSize: 10,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.2,
                       color: const Color(0xFF8D6E63),
@@ -2196,9 +2618,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Row(
                 children: [
-                  _iconAction(Icons.bookmark_border),
-                  const SizedBox(width: 16),
-                  _iconAction(Icons.share_outlined),
+                  _iconAction(Icons.share_outlined, onTap: () => shareHadeesAsCard(context, h)),
                 ],
               ),
             ],
@@ -2758,5 +3178,386 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (sunrise == null || dhuhr == null) return null;
     final diff = dhuhr.difference(sunrise);
     return sunrise.add(Duration(minutes: diff.inMinutes ~/ 2));
+  }
+}
+
+class _WikiInfo {
+  final String title;
+  final String extract;
+  const _WikiInfo(this.title, this.extract);
+}
+
+class _EventHistory extends StatefulWidget {
+  final String wikiEn;
+  final String wikiUr;
+  final Color accent;
+
+  const _EventHistory({
+    required this.wikiEn,
+    required this.wikiUr,
+    required this.accent,
+  });
+
+  @override
+  State<_EventHistory> createState() => _EventHistoryState();
+}
+
+class _EventHistoryState extends State<_EventHistory> {
+  static final Map<String, _WikiInfo?> _cacheEn = {};
+  static final Map<String, _WikiInfo?> _cacheUr = {};
+
+  static const _headers = {
+    'Accept': 'application/json',
+    'User-Agent': 'QuranPak/1.0 (Islamic calendar app)',
+  };
+
+  late Future<_WikiInfo?> _futureEn;
+  late Future<_WikiInfo?> _futureUr;
+
+  @override
+  void initState() {
+    super.initState();
+    _futureEn = _load(lang: 'en', title: widget.wikiEn, cache: _cacheEn);
+    _futureUr = _load(lang: 'ur', title: widget.wikiUr, cache: _cacheUr);
+  }
+
+  String _shorten(String text, {int max = 480}) {
+    final t = text.trim();
+    if (t.length <= max) return t;
+    final cut = t.substring(0, max);
+    final i = cut.lastIndexOf('. ');
+    return i > 120 ? cut.substring(0, i + 1) : '${cut.trimRight()}…';
+  }
+
+  Future<_WikiInfo?> _load({
+    required String lang,
+    required String title,
+    required Map<String, _WikiInfo?> cache,
+  }) async {
+    if (title.trim().isEmpty) return null;
+    if (cache.containsKey(title)) return cache[title];
+
+    try {
+      final encoded = Uri.encodeComponent(title.replaceAll(' ', '_'));
+      final uri = Uri.parse(
+        'https://$lang.wikipedia.org/api/rest_v1/page/summary/$encoded',
+      );
+      final res = await http
+          .get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode != 200) {
+        cache[title] = null;
+        return null;
+      }
+      final json = jsonDecode(res.body) as Map<String, dynamic>;
+      if ((json['type'] as String?) == 'disambiguation') {
+        cache[title] = null;
+        return null;
+      }
+      final extract = (json['extract'] as String?) ?? '';
+      if (extract.isEmpty) {
+        cache[title] = null;
+        return null;
+      }
+      final info = _WikiInfo(
+        (json['title'] as String?) ?? title,
+        _shorten(extract),
+      );
+      cache[title] = info;
+      return info;
+    } catch (_) {
+      cache[title] = null;
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: widget.accent.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.history_edu, size: 14, color: widget.accent),
+              const SizedBox(width: 6),
+              Text(
+                'SHORT HISTORY',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w700,
+                  color: widget.accent,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FutureBuilder<_WikiInfo?>(
+            future: _futureEn,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return _loadingRow(widget.accent, 'Loading English…');
+              }
+              if (snap.data == null) {
+                return Text(
+                  'English summary unavailable.',
+                  style: GoogleFonts.inter(
+                    fontSize: 11.5,
+                    color: Colors.grey.shade500,
+                    fontStyle: FontStyle.italic,
+                  ),
+                );
+              }
+              return Text(
+                snap.data!.extract,
+                style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  height: 1.55,
+                  color: Colors.black87,
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Divider(height: 1, color: Colors.grey.shade300),
+          const SizedBox(height: 12),
+          FutureBuilder<_WikiInfo?>(
+            future: _futureUr,
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return _loadingRow(widget.accent, 'اردو خلاصہ لوڈ ہو رہا ہے…');
+              }
+              if (snap.data == null) {
+                return Directionality(
+                  textDirection: TextDirection.rtl,
+                  child: Text(
+                    'اردو خلاصہ دستیاب نہیں۔',
+                    style: GoogleFonts.notoNastaliqUrdu(
+                      fontSize: 12,
+                      height: 2.0,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                );
+              }
+              return Directionality(
+                textDirection: TextDirection.rtl,
+                child: Text(
+                  snap.data!.extract,
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.notoNastaliqUrdu(
+                    fontSize: 12.5,
+                    height: 2.2,
+                    color: Colors.black87,
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _loadingRow(Color accent, String label) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 11.5,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BannersSlider extends StatefulWidget {
+  const _BannersSlider();
+
+  @override
+  State<_BannersSlider> createState() => _BannersSliderState();
+}
+
+class _BannersSliderState extends State<_BannersSlider> {
+  List<String> _cachedImageUrls = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCachedBanners();
+  }
+
+  Future<void> _loadCachedBanners() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getStringList('cached_banner_urls');
+      if (cached != null && cached.isNotEmpty && mounted) {
+        setState(() {
+          _cachedImageUrls = cached;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveCachedBanners(List<String> urls) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('cached_banner_urls', urls);
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('banners')
+          .orderBy('index')
+          .snapshots(),
+      builder: (context, snapshot) {
+        List<String> imageUrls = _cachedImageUrls;
+
+        if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+          final docs = snapshot.data!.docs;
+          final fetchedUrls = docs
+              .map((d) => (d.data() as Map<String, dynamic>)['img_url'] as String?)
+              .where((url) => url != null && url.isNotEmpty)
+              .cast<String>()
+              .toList();
+
+          if (fetchedUrls.isNotEmpty) {
+            imageUrls = fetchedUrls;
+            _saveCachedBanners(fetchedUrls);
+          }
+        }
+
+        if (imageUrls.isEmpty) return const SizedBox.shrink();
+
+        return _BannerPageView(imageUrls: imageUrls);
+      },
+    );
+  }
+}
+
+class _BannerPageView extends StatefulWidget {
+  final List<String> imageUrls;
+  const _BannerPageView({required this.imageUrls});
+
+  @override
+  State<_BannerPageView> createState() => _BannerPageViewState();
+}
+
+class _BannerPageViewState extends State<_BannerPageView> {
+  final PageController _pageController = PageController();
+  int _currentIndex = 0;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoScroll();
+  }
+
+  void _startAutoScroll() {
+    _timer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (!mounted) return;
+      if (widget.imageUrls.isEmpty) return;
+      int nextIndex = (_currentIndex + 1) % widget.imageUrls.length;
+      _pageController.animateToPage(
+        nextIndex,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 180,
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: widget.imageUrls.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            itemBuilder: (context, index) {
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                child: ClipRRect(
+                  child: CachedNetworkImage(
+                    imageUrl: widget.imageUrls[index],
+                    fit: BoxFit.fill,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey.shade200,
+                      child: const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey.shade300,
+                      child: const Center(
+                        child: Icon(Icons.image_not_supported_outlined, color: Colors.grey),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        if (widget.imageUrls.length > 1) ...[
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(widget.imageUrls.length, (index) {
+              return Container(
+                width: _currentIndex == index ? 18 : 6,
+                height: 6,
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(3),
+                  color: _currentIndex == index
+                      ? const Color(0xFF1B5E20)
+                      : Colors.grey.shade300,
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:quranpak/utils/AppTheme.dart';
+import '../services/HadithCloudDownloadService.dart';
 import 'HadithCollectionBooksScreen.dart';
 
 class HadithCollectionInfo {
@@ -29,9 +31,14 @@ class HadithCollectionInfo {
   });
 }
 
-class HadithBooksScreen extends StatelessWidget {
+class HadithBooksScreen extends StatefulWidget {
   const HadithBooksScreen({super.key});
 
+  @override
+  State<HadithBooksScreen> createState() => _HadithBooksScreenState();
+}
+
+class _HadithBooksScreenState extends State<HadithBooksScreen> {
   static const List<HadithCollectionInfo> sixBooks = [
     HadithCollectionInfo(
       id: 'bukhari',
@@ -113,6 +120,123 @@ class HadithBooksScreen extends StatelessWidget {
     ),
   ];
 
+  final Map<String, bool> _downloaded = {};
+  final Map<String, bool> _downloading = {};
+  final Map<String, double> _progress = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _checkStatusAndPreload();
+  }
+
+  String _getBookName(String id) {
+    switch (id) {
+      case 'bukhari':
+        return 'sahih-bukhari';
+      case 'muslim':
+        return 'sahih-muslim';
+      case 'abudawud':
+        return 'sunan-abu-dawud';
+      case 'tirmidhi':
+        return 'jami-at-tirmidhi';
+      case 'nasai':
+        return 'sunan-an-nasai';
+      case 'ibnmajah':
+        return 'sunan-ibn-majah';
+      default:
+        return id;
+    }
+  }
+
+  Future<void> _checkStatusAndPreload() async {
+    for (final book in sixBooks) {
+      final bookName = _getBookName(book.id);
+      final exists = await HadithCloudDownloadService.isBookDownloaded(bookName);
+      if (mounted) {
+        setState(() {
+          _downloaded[book.id] = exists;
+        });
+      }
+    }
+
+    // Automatically download all six books sequentially in background
+    HadithCloudDownloadService.downloadAllSixBooksSequentially(
+      onBookProgress: (bookName, percentage) {
+        if (!mounted) return;
+        final matchingBook = sixBooks.firstWhere(
+              (b) => _getBookName(b.id) == bookName,
+          orElse: () => sixBooks.first,
+        );
+        setState(() {
+          _downloading[matchingBook.id] = true;
+          _progress[matchingBook.id] = percentage;
+        });
+      },
+      onBookCompleted: (bookName) {
+        if (!mounted) return;
+        final matchingBook = sixBooks.firstWhere(
+              (b) => _getBookName(b.id) == bookName,
+          orElse: () => sixBooks.first,
+        );
+        setState(() {
+          _downloading[matchingBook.id] = false;
+          _downloaded[matchingBook.id] = true;
+          _progress[matchingBook.id] = 100.0;
+        });
+      },
+    );
+  }
+
+  Future<void> _downloadOnDemand(HadithCollectionInfo book) async {
+    final bookName = _getBookName(book.id);
+    setState(() {
+      _downloading[book.id] = true;
+      _progress[book.id] = 0.0;
+    });
+
+    try {
+      await HadithCloudDownloadService.downloadBook(
+        bookName: bookName,
+        onProgress: (received, total, percentage) {
+          if (!mounted) return;
+          setState(() {
+            _progress[book.id] = percentage;
+          });
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _downloading[book.id] = false;
+        _downloaded[book.id] = true;
+      });
+
+      // Open screen immediately after download finishes
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => HadithCollectionBooksScreen(
+            dbFileName: book.dbFileName!,
+            collectionName: book.nameEn,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _downloading[book.id] = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppTheme.primary,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadiusGeometry.circular(12)),
+            content: Text('Download failed, Try again later!', textScaler: TextScaler.linear(1),)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     const ink = Color(0xFF14201A);
@@ -161,12 +285,19 @@ class HadithBooksScreen extends StatelessWidget {
             return _SectionHeader(total: sixBooks.length, gold: gold, ink: ink);
           }
           final book = sixBooks[index - 1];
+          final isDownloaded = _downloaded[book.id] ?? false;
+          final isDownloading = _downloading[book.id] ?? false;
+          final progressVal = _progress[book.id] ?? 0.0;
+
           return _BookCard(
             book: book,
             gold: gold,
             ink: ink,
+            isDownloaded: isDownloaded,
+            isDownloading: isDownloading,
+            progress: progressVal,
             onTap: () {
-              if (book.isAvailable && book.dbFileName != null) {
+              if (isDownloaded && book.dbFileName != null) {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -176,6 +307,8 @@ class HadithBooksScreen extends StatelessWidget {
                     ),
                   ),
                 );
+              } else if (!isDownloading) {
+                _downloadOnDemand(book);
               }
             },
           );
@@ -247,12 +380,18 @@ class _BookCard extends StatelessWidget {
   final HadithCollectionInfo book;
   final Color gold;
   final Color ink;
+  final bool isDownloaded;
+  final bool isDownloading;
+  final double progress;
   final VoidCallback onTap;
 
   const _BookCard({
     required this.book,
     required this.gold,
     required this.ink,
+    required this.isDownloaded,
+    required this.isDownloading,
+    required this.progress,
     required this.onTap,
   });
 
@@ -279,7 +418,7 @@ class _BookCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Top bar: color strip + emblem + name + count ──
+              // ── Top bar: color strip + emblem + name + status button ──
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 14, 14, 0),
                 child: Row(
@@ -304,7 +443,7 @@ class _BookCard extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // English name + count badge
+                          // English name + status/download badge
                           Row(
                             children: [
                               Expanded(
@@ -321,23 +460,7 @@ class _BookCard extends StatelessWidget {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 7, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: book.primaryColor.withValues(alpha: 0.08),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  book.hadithCount,
-                                  style: TextStyle(
-                                    fontSize: 10.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: book.primaryColor,
-                                    letterSpacing: 0.2,
-                                  ),
-                                ),
-                              ),
+                              _buildStatusBadge(),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -361,6 +484,33 @@ class _BookCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 10),
+
+              // ── Download Progress Bar if downloading ──
+              if (isDownloading) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LinearProgressIndicator(
+                        value: progress > 0 ? progress / 100 : null,
+                        color: book.primaryColor,
+                        backgroundColor: book.primaryColor.withValues(alpha: 0.1),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Downloading... ${progress.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: book.primaryColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+              ],
 
               // ── Urdu name + author ──
               Padding(
@@ -433,6 +583,65 @@ class _BookCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge() {
+    if (isDownloading) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.orange.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Text(
+          'Downloading',
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Colors.orange,
+          ),
+        ),
+      );
+    }
+    if (isDownloaded) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: Colors.green.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: const Text(
+          'Available',
+          style: TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: Colors.green,
+          ),
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: book.primaryColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.download, size: 12, color: book.primaryColor),
+          const SizedBox(width: 3),
+          Text(
+            'Download',
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: book.primaryColor,
+            ),
+          ),
+        ],
       ),
     );
   }

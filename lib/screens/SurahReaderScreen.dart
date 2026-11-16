@@ -648,12 +648,14 @@ class _SurahReaderScreenState extends State<SurahReaderScreen> {
         return Scaffold(
           backgroundColor: const Color(0xFFF8F6F0),
           appBar: AppBar(
+            scrolledUnderElevation: 0,
+            actionsPadding: EdgeInsets.only(right: 10),
             backgroundColor: AppTheme.primary,
             foregroundColor: Colors.white,
             elevation: 0,
             title: Text(
               _dynamicSurahName.isNotEmpty
-                  ? _dynamicSurahName
+                  ? "سورة $_dynamicSurahName"
                   : (widget.juzNumber != null
                         ? 'الجزء ${toArabicNumerals(widget.juzNumber!)}'
                         : 'القرآن الكريم'),
@@ -662,25 +664,55 @@ class _SurahReaderScreenState extends State<SurahReaderScreen> {
                 color: Colors.white,
               ),
             ),
+
             actions: [
               // Change Translation
-              IconButton(
-                tooltip: 'Change Translation',
-                icon: const Icon(Icons.translate, color: AppTheme.gold),
-                onPressed: _showTranslationSheet,
-              ),
-              // Auto-scroll play / pause
-              IconButton(
-                tooltip: _isAutoScrolling
-                    ? 'Pause auto scroll'
-                    : 'Start auto scroll',
-                icon: Icon(
-                  _isAutoScrolling
-                      ? Icons.pause_circle_outline
-                      : Icons.play_circle_outline,
-                  color: AppTheme.gold,
+              InkWell(
+                onTap: _showTranslationSheet,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.translate, size: 20, color: AppTheme.gold),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Translation',
+                        style: const TextStyle(fontSize: 11, color: AppTheme.gold),
+                        textScaler: TextScaler.linear(1),
+                      ),
+                    ],
+                  ),
                 ),
-                onPressed: _toggleAutoScroll,
+              ),
+              const SizedBox(width: 4),
+
+              // Auto-scroll play / pause
+              InkWell(
+                onTap: _toggleAutoScroll,
+                borderRadius: BorderRadius.circular(20),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _isAutoScrolling
+                            ? Icons.pause_circle_outline
+                            : Icons.play_circle_outline,
+                        size: 20,
+                        color: AppTheme.gold,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Autoscroll',
+                        style: const TextStyle(fontSize: 11, color: AppTheme.gold),
+                        textScaler: TextScaler.linear(1),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -961,16 +993,13 @@ class _SurahReaderScreenState extends State<SurahReaderScreen> {
                 ],
                 const Spacer(),
                 // Audio button (turns into pause icon when playing)
-                IconButton(
-                  tooltip: isPlaying ? 'Pause recitation' : 'Play verse',
-                  icon: Icon(
-                    isPlaying
-                        ? Icons.pause_circle_filled
-                        : Icons.volume_up_rounded,
-                    color: AppTheme.primary,
-                    size: 26,
-                  ),
-                  onPressed: () async {
+                _iconLabel(
+                  icon: isPlaying
+                      ? Icons.pause_circle_filled
+                      : Icons.volume_up_rounded,
+                  label: isPlaying ? 'Pause Ayat' : 'Play Ayat',
+                  active: isPlaying,
+                  onTap: () async {
                     try {
                       await audioPlayer.playSingleAyah(
                         surahNumber: ayah.surahNumber,
@@ -987,16 +1016,17 @@ class _SurahReaderScreenState extends State<SurahReaderScreen> {
                     }
                   },
                 ),
-                // Bookmark button
-                IconButton(
-                  tooltip: isBookmarked ? 'Remove bookmark' : 'Bookmark ayah',
-                  icon: Icon(
-                    isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                    color: isBookmarked ? AppTheme.gold : Colors.grey,
-                    size: 22,
-                  ),
-                  onPressed: () => _toggleBookmark(ayah),
+                const SizedBox(width: 4),
+// Bookmark pill (Bookmark / Saved + label)
+                _iconLabel(
+                  icon: isBookmarked
+                      ? Icons.bookmark
+                      : Icons.bookmark_border,
+                  label: isBookmarked ? 'Saved' : 'Bookmark',
+                  active: isBookmarked,
+                  onTap: () => _toggleBookmark(ayah),
                 ),
+
               ],
             ),
             const SizedBox(height: 14),
@@ -1084,30 +1114,26 @@ class _SurahReaderScreenState extends State<SurahReaderScreen> {
             const SizedBox(height: 4),
 
             // ── Card Footer Actions: Copy, Share ──
+// ── Card Footer Actions: Copy, Share (with labels) ──
             Row(
               children: [
                 const Spacer(),
-                IconButton(
-                  tooltip: 'Copy Ayah',
-                  icon: const Icon(
-                    Icons.copy_rounded,
-                    size: 18,
-                    color: Colors.grey,
-                  ),
-                  onPressed: () async {
+                _iconLabel(
+                  icon: Icons.copy_rounded,
+                  label: 'Copy',
+                  muted: true,
+                  onTap: () async {
                     final text =
                         '${ayah.text}\n\n— ${ayah.surahEnglishName ?? "Surah"} (${ayah.surahNumber}:${ayah.numberInSurah})';
                     await Clipboard.setData(ClipboardData(text: text));
                   },
                 ),
-                IconButton(
-                  tooltip: 'Share Ayah',
-                  icon: const Icon(
-                    Icons.share_rounded,
-                    size: 18,
-                    color: Colors.grey,
-                  ),
-                  onPressed: () {
+                const SizedBox(width: 4),
+                _iconLabel(
+                  icon: Icons.share_rounded,
+                  label: 'Share',
+                  muted: true,
+                  onTap: () {
                     final text =
                         '${ayah.text}\n\n— ${ayah.surahEnglishName ?? "Surah"} (${ayah.surahNumber}:${ayah.numberInSurah})';
                     Share.share(text);
@@ -1121,6 +1147,50 @@ class _SurahReaderScreenState extends State<SurahReaderScreen> {
     );
   }
 }
+
+
+///Label for Icons to identification of usage of app.
+
+Widget _iconLabel({
+  required IconData icon,
+  required String label,
+  required VoidCallback? onTap,
+  bool active = false,
+  bool muted = false,
+}) {
+  final Color color = active
+      ? AppTheme.gold
+      : muted
+      ? Colors.grey.shade600
+      : AppTheme.primary;
+
+  return Material(
+    color: Colors.transparent,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 
 // ═════════════════════════════════════════════════════════════
 // VERSE TEXT WITH AUDIO-SYNCED COLOUR FILL

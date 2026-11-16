@@ -58,20 +58,20 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDtO9ctrTS6wEjRAwDtagrBhdqwvANpvAg',
-    appId: '1:805262896243:android:05b6be4794367464808e06',
+    appId: '1:805262896243:android:96eb951567ca7ca4808e06',
     messagingSenderId: '805262896243',
+
     projectId: 'com-rustinnovations-fiqha',
     storageBucket: 'com-rustinnovations-fiqha.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyDc7rDpPDMEQUSrj-0wDzwE_tmMmEdcJqo',
-    appId: '1:805262896243:ios:8b462ef4541910ed808e06',
+    appId: '1:805262896243:ios:d442d897643d69fc808e06',
     messagingSenderId: '805262896243',
     projectId: 'com-rustinnovations-fiqha',
     storageBucket: 'com-rustinnovations-fiqha.firebasestorage.app',
     androidClientId: '805262896243-0b52upg4sd5gjn43632g1nt1d0t75h9e.apps.googleusercontent.com',
-    iosClientId: '805262896243-af581qkpj2s94aklbgv8qs91i8idss5s.apps.googleusercontent.com',
-    iosBundleId: 'com.rustinnovations.fiqha',
+    iosClientId: '805262896243-062v8rqhk3ipagjhk8autq9b172drh5c.apps.googleusercontent.com',
+    iosBundleId: 'com.rustinnovations.fiqah',
   );
 }

@@ -1153,21 +1153,39 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
             child: Row(
               children: [
                 Container(
-                  width: 46,
-                  height: 46,
+                  width: 50,
+                  height: 50,
                   decoration: BoxDecoration(
                     color: const Color(0xFFE2B76C).withOpacity(0.18),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
-                    child: Text(
-                      '${today.hDay}',
-                      style: GoogleFonts.inter(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFFE2B76C),
-                      ),
-                      textScaler: TextScaler.linear(1),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${DateTime.now().day}',
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFE2B76C),
+                          ),
+                          textScaler: TextScaler.linear(1),
+                        ),
+
+                        Text(
+                          '${DateFormat('MMM').format(DateTime.now())}',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                            color: const Color(0xFFE2B76C),
+                          ),
+                          textScaler: TextScaler.linear(1),
+                        ),
+
+
+                      ],
                     ),
                   ),
                 ),
@@ -1223,14 +1241,14 @@ class _IslamicCalendarScreenState extends State<IslamicCalendarScreen> {
                         DropdownMenuItem(
                           value: CalendarMode.hijri,
                           child: Text(
-                            'Hijri',
+                            'Islamic',
                             textScaler: TextScaler.linear(1),
                           ),
                         ),
                         DropdownMenuItem(
                           value: CalendarMode.gregorian,
                           child: Text(
-                            'Gregorian',
+                            'Regular',
                             textScaler: TextScaler.linear(1),
                           ),
                         ),

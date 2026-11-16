@@ -101,10 +101,17 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(_handleTabChange);
+  }
+
+  void _handleTabChange() {
+    if (!mounted) return;
+    setState(() {});
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     super.dispose();
   }
@@ -142,26 +149,10 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
         surahName: surahName,
       );
       if (!context.mounted) return;
-      toastification.show(
-        context: context,
-        type: ToastificationType.success,
-        style: ToastificationStyle.flatColored,
-        title: const Text('Playing Tilawat'),
-        description: Text('${reciter.name} • $surahName'),
-        autoCloseDuration: const Duration(seconds: 2),
-        icon: const Icon(Icons.play_circle_fill),
-      );
+      _snack('Playing Tilawat');
     } else {
       if (!context.mounted) return;
-      toastification.show(
-        context: context,
-        type: ToastificationType.info,
-        style: ToastificationStyle.flatColored,
-        title: const Text('Downloading Tilawat...'),
-        description: Text('Downloading $surahName for ${reciter.name}'),
-        autoCloseDuration: const Duration(seconds: 3),
-        icon: const Icon(Icons.cloud_download),
-      );
+      _snack('Downloading $surahName for ${reciter.name}');
 
       try {
         await dl.downloadSurah(surahNumber, reciterId: reciter.id);
@@ -172,29 +163,24 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
           surahName: surahName,
         );
         if (!context.mounted) return;
-        toastification.show(
-          context: context,
-          type: ToastificationType.success,
-          style: ToastificationStyle.flatColored,
-          title: const Text('Download complete'),
-          description: Text('Now playing \ (\)'),
-          autoCloseDuration: const Duration(seconds: 2),
-          icon: const Icon(Icons.offline_pin),
-        );
+        _snack("Download Complete");
       } catch (e) {
         if (!context.mounted) return;
-        toastification.show(
-          context: context,
-          type: ToastificationType.error,
-          style: ToastificationStyle.flatColored,
-          title: const Text('Download failed'),
-          description: Text('Could not download audio: '),
-          autoCloseDuration: const Duration(seconds: 3),
-          icon: const Icon(Icons.error_outline),
-        );
+        _snack("Could not download audio");
       }
     }
   }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: AppTheme.primary,
+        behavior: SnackBarBehavior.floating,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadiusGeometry.circular(20)),
+        content: Text(message)));
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -524,12 +510,29 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   if (downloading)
-                                    const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '${(translationProvider.translationDownloadProgress * 100).round()}%',
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.primary,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            value: translationProvider.translationDownloadProgress > 0
+                                                ? translationProvider.translationDownloadProgress
+                                                : null,
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                      ],
                                     )
                                   else
                                     IconButton(
@@ -842,12 +845,13 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
   // ALL SURAHS ROW
   // ─────────────────────────────────────────────────────────────
   Widget _buildAllSurahsRow(QuranProvider provider) {
+    final isJuzTab = _tabController.index == 1;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: Row(
         children: [
           Text(
-            'All Surahs (${provider.surahs.length})',
+            isJuzTab ? 'Total Juz (${juzNames.length})' : 'All Surahs (${provider.surahs.length})',
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -855,20 +859,21 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
             ),
           ),
           const Spacer(),
-          Row(
-            children: const [
-              Icon(Icons.swap_vert, size: 16, color: AppTheme.gold),
-              SizedBox(width: 4),
-              Text(
-                'Standard Order',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.gold,
+          if (!isJuzTab)
+            Row(
+              children: const [
+                Icon(Icons.swap_vert, size: 16, color: AppTheme.gold),
+                SizedBox(width: 4),
+                Text(
+                  'Standard Order',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.gold,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -1075,79 +1080,97 @@ class _QuranHomeScreenState extends State<QuranHomeScreen>
                     final isThisSurah = fullPlayer.currentSurah == surahNumber;
                     final isPlaying = isThisSurah && fullPlayer.isPlaying;
                     final isPaused =
-                        isThisSurah &&
-                        !fullPlayer.isPlaying &&
-                        fullPlayer.hasSurah;
+                        isThisSurah && !fullPlayer.isPlaying && fullPlayer.hasSurah;
 
                     final dlProgress = dlProvider.progress[surahNumber];
                     final isDownloading =
                         dlProgress?.status == SurahDlStatus.downloading ||
-                        dlProgress?.status == SurahDlStatus.queued;
+                            dlProgress?.status == SurahDlStatus.queued;
 
-                    Widget iconChild;
+                    // ── Decide icon + label from state ──────────────────────────────
+                    Widget leading;
+                    String label;
+
                     if (isDownloading) {
-                      iconChild = SizedBox(
-                        width: 18,
-                        height: 18,
+                      leading = SizedBox(
+                        width: 14,
+                        height: 14,
                         child: CircularProgressIndicator(
                           value:
-                              dlProgress?.status == SurahDlStatus.downloading &&
-                                  dlProgress?.progress != null &&
-                                  dlProgress!.progress > 0
+                          dlProgress?.status == SurahDlStatus.downloading &&
+                              dlProgress?.progress != null &&
+                              dlProgress!.progress > 0
                               ? dlProgress.progress
                               : null,
                           strokeWidth: 2,
-                          valueColor: const AlwaysStoppedAnimation(
-                            AppTheme.primary,
-                          ),
+                          valueColor: const AlwaysStoppedAnimation(AppTheme.primary),
                         ),
                       );
+                      label = dlProgress?.status == SurahDlStatus.queued
+                          ? 'Queued'
+                          : 'Loading';
                     } else if (isPlaying) {
-                      iconChild = const Icon(
+                      leading = const Icon(
                         CupertinoIcons.pause,
-                        size: 20,
+                        size: 16,
                         color: AppTheme.primary,
                       );
+                      label = 'Pause';
                     } else if (isPaused) {
-                      iconChild = const Icon(
+                      leading = const Icon(
                         customIcons.play,
-                        size: 20,
+                        size: 16,
                         color: AppTheme.primary,
                       );
+                      label = 'Resume';
                     } else {
-                      iconChild = const Icon(
+                      leading = const Icon(
                         customIcons.play,
+                        size: 14,
                         applyTextScaling: false,
-                        size: 18,
                         color: AppTheme.primary,
                       );
+                      label = 'Play';
                     }
 
+                    final highlighted = isPlaying || isPaused;
+
+                    // ── Pill button ─────────────────────────────────────────────────
                     return Container(
-                      width: 34,
-                      height: 34,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: isPlaying || isPaused
+                        color: highlighted
                             ? AppTheme.gold.withOpacity(0.20)
                             : AppTheme.surfaceContainer,
-                        shape: BoxShape.circle,
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       child: InkWell(
-                        radius: 20,
+                        borderRadius: BorderRadius.circular(20),
                         onTap: () {
                           if (isPlaying) {
                             fullPlayer.pause();
                           } else if (isPaused) {
                             fullPlayer.resume();
                           } else {
-                            _playSurah(
-                              context,
-                              surahNumber,
-                              surah.englishName ?? '',
-                            );
+                            _playSurah(context, surahNumber, surah.englishName ?? '');
                           }
                         },
-                        child: Center(child: iconChild),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            leading,
+                            const SizedBox(width: 4),
+                            Text(
+                              label,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary,
+                              ),
+                              textScaler: TextScaler.noScaling,
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },

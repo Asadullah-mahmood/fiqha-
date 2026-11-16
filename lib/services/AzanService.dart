@@ -66,7 +66,7 @@ class AzanService {
       );
 
   static Future<void> init(FlutterLocalNotificationsPlugin plugin) async {
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('@mipmap/launcher_icon');
     const iosInit = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,

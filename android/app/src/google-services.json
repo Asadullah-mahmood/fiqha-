@@ -7,17 +7,25 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:805262896243:android:05b6be4794367464808e06",
+        "mobilesdk_app_id": "1:805262896243:android:a63c56fcb1a817af808e06",
         "android_client_info": {
-          "package_name": "com.rustinnovations.fiqha"
+          "package_name": "com.rustinnovations.fiqah"
         }
       },
       "oauth_client": [
         {
-          "client_id": "805262896243-2rbnrr30mgqjsfit7mr4gv5tp4hscp05.apps.googleusercontent.com",
+          "client_id": "805262896243-6hmge89hkdn5144isqgn6uiu7gfum82m.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.rustinnovations.fiqha",
+            "package_name": "com.rustinnovations.fiqah",
+            "certificate_hash": "6d4c5815d524a1abaa32c116341afffb3a7b5c4d"
+          }
+        },
+        {
+          "client_id": "805262896243-egt0sk1o1h0kou7sb596bo7lpn466i4m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.rustinnovations.fiqah",
             "certificate_hash": "93888d2f9d812a6074acb1bcd1090bccb50aa1ab"
           }
         },
@@ -39,10 +47,10 @@
               "client_type": 3
             },
             {
-              "client_id": "805262896243-4ltte1qh0s5dgdoc1e9928v12o4r7stb.apps.googleusercontent.com",
+              "client_id": "805262896243-062v8rqhk3ipagjhk8autq9b172drh5c.apps.googleusercontent.com",
               "client_type": 2,
               "ios_info": {
-                "bundle_id": "com.rustinnovations.fiqha.fiqhaApp"
+                "bundle_id": "com.rustinnovations.fiqah"
               }
             }
           ]

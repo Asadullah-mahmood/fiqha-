@@ -47,31 +47,80 @@ class QuranRepository {
     return ayahCount > 0 && translatedCount == ayahCount;
   }
 
-  Future<void> ensureTranslationDownloaded(String edition) async {
-    if (await isTranslationDownloaded(edition)) return;
-    await compute(QuranDownloadService.downloadFullQuran, <Object?>[
-      RootIsolateToken.instance!,
-      edition,
-    ]);
+  Future<void> ensureTranslationDownloaded(
+    String edition, {
+    void Function(double)? onProgress,
+  }) async {
+    if (await isTranslationDownloaded(edition)) {
+      onProgress?.call(1.0);
+      return;
+    }
+    onProgress?.call(0.05);
+    final url = '$_baseUrl/quran/$edition';
+    final request = http.Request('GET', Uri.parse(url));
+    final streamedResponse = await http.Client().send(request);
+    if (streamedResponse.statusCode != 200) {
+      throw Exception('Failed to download translation $edition');
+    }
+    final contentLength = streamedResponse.contentLength;
+    List<int> bytes = [];
+    int received = 0;
+    await for (final chunk in streamedResponse.stream) {
+      bytes.addAll(chunk);
+      received += chunk.length;
+      if (contentLength != null && contentLength > 0 && onProgress != null) {
+        final prog = 0.05 + (0.65 * (received / contentLength.toDouble())).clamp(0.0, 0.65);
+        onProgress(prog);
+      }
+    }
+    onProgress?.call(0.75);
+
+    final bodyStr = utf8.decode(bytes);
+    final payload = json.decode(bodyStr);
+    final data = payload['data'];
+    final List<dynamic> surahs = data['surahs'];
+
+    final db = await QuranDatabase.database;
+    final ayahRows = await db.rawQuery(
+      'SELECT id, surah_number, number_in_surah FROM ayahs',
+    );
+    final Map<String, int> ayahIdMap = {};
+    for (var row in ayahRows) {
+      final key = '${row['surah_number']}:${row['number_in_surah']}';
+      ayahIdMap[key] = row['id'] as int;
+    }
+
+    onProgress?.call(0.85);
+
+    await db.transaction((txn) async {
+      Batch batch = txn.batch();
+      for (var surah in surahs) {
+        final surahNum = surah['number'];
+        final List<dynamic> ayahs = surah['ayahs'];
+        for (var ayah in ayahs) {
+          final numInSurah = ayah['numberInSurah'];
+          final key = '$surahNum:$numInSurah';
+          final ayahId = ayahIdMap[key];
+          if (ayahId != null) {
+            batch.insert(
+              'translations',
+              {
+                'ayah_id': ayahId,
+                'edition_identifier': edition,
+                'text': ayah['text'],
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+          }
+        }
+      }
+      await batch.commit(noResult: true);
+    });
+
+    onProgress?.call(1.0);
+
     if (!await isTranslationDownloaded(edition)) {
-      final db = await QuranDatabase.database;
-      final coverage = await db.rawQuery(
-        '''
-        SELECT COUNT(DISTINCT a.surah_number || ':' || a.number_in_surah)
-                 AS saved_count,
-               (SELECT COUNT(DISTINCT surah_number || ':' || number_in_surah)
-                FROM ayahs) AS expected_count
-        FROM translations t
-        JOIN ayahs a ON a.id = t.ayah_id
-        WHERE t.edition_identifier = ?
-        ''',
-        [edition],
-      );
-      final saved = coverage.first['saved_count'] as int? ?? 0;
-      final expected = coverage.first['expected_count'] as int? ?? 0;
-      throw Exception(
-        'Translation $edition was only saved for $saved of $expected ayahs.',
-      );
+      throw Exception('Translation $edition download verification failed.');
     }
   }
 
